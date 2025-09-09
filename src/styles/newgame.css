@@ -1,0 +1,7 @@
+.new-wrap{ display:grid; grid-template-columns:2fr 1fr; gap:16px; }
+.cat-select{ display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); margin-top:12px; }
+.cat-btn{ border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; background:#fff; text-align:right; }
+.cat-btn.selected{ outline:3px solid var(--brand-2); }
+.cat-btn img{ width:100%; height:110px; object-fit:cover; display:block; background:#eef1f5; }
+.cat-btn .nm{ padding:8px 10px; font-weight:700; background:#fff; }
+.side-card{ position:sticky; top:16px; }
