@@ -1,8 +1,9 @@
+// src/pages/GameRoom/GameRoom.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import {
-  doc, onSnapshot, collection, getDocs, getDoc, updateDoc
+  doc, onSnapshot, collection, getDocs, getDoc
 } from "firebase/firestore";
 import "../../styles/game.css";
 
@@ -30,9 +31,8 @@ export default function GameRoom() {
   const { id } = useParams();
   const nav = useNavigate();
   const [game, setGame] = useState(null);
-  const [cats, setCats] = useState([]);       // [{position, categoryId, name, imageUrl}]
-  const [tiles, setTiles] = useState([]);     // [{id, categoryPosition, value, opened, questionId}]
-  const [modal, setModal] = useState(null);   // {tile, question, revealed:boolean}
+  const [cats, setCats] = useState([]);
+  const [tiles, setTiles] = useState([]);
 
   useEffect(() => {
     const gref = doc(db, "games", id);
@@ -41,9 +41,12 @@ export default function GameRoom() {
       const g = snap.data();
       setGame({ id: snap.id, ...g });
 
-      // categories
+      // categories (ordered)
       const catsSnap = await getDocs(collection(gref, "game_categories"));
-      const raw = catsSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b)=>a.position-b.position);
+      const raw = catsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a,b)=>a.position-b.position);
+
       const enriched = await Promise.all(raw.map(async r => {
         const cs = await getDoc(doc(db, "categories", r.categoryId));
         const cd = cs.exists() ? cs.data() : { name: "(محذوف)", imageUrl:"" };
@@ -59,41 +62,23 @@ export default function GameRoom() {
   }, [id]);
 
   const columns = useMemo(() => (cats.length || 0), [cats]);
-  const values = [200, 400, 600];
 
-  async function openTile(t) {
-    if (!t || t.opened) return;
-    const qs = await getDoc(doc(db, "questions", t.questionId));
-    const qd = qs.exists() ? qs.data() : { text: "(مفقود)", answer:"", imageUrl:"" };
-    setModal({ tile: t, question: qd, revealed: false });
-  }
+  // 6-row sequence (matches seeding)
+  const ROW_VALUES = [200, 200, 400, 400, 600, 600];
 
-  async function assign(to) {
-    if (!modal) return;
-    const t = modal.tile;
-    const gref = doc(db, "games", id);
-    const tref = doc(gref, "game_tiles", t.id);
-
-    const newScores = { teamAScore: game.teamAScore || 0, teamBScore: game.teamBScore || 0 };
-    let correct = false;
-    if (to === "A" || to === "B") {
-      correct = true;
-      if (to === "A") newScores.teamAScore += t.value;
-      else newScores.teamBScore += t.value;
+  // Fast lookup: "catPos:rowIndex" -> tile
+  const tileIndex = useMemo(() => {
+    const m = new Map();
+    for (const t of tiles) {
+      // categoryPosition and rowIndex are 1-based in seeding
+      m.set(`${t.categoryPosition}:${t.rowIndex}`, t);
     }
+    return m;
+  }, [tiles]);
 
-    await updateDoc(tref, { opened: true, answeredBy: to, correct });
-    await updateDoc(gref, {
-      teamAScore: newScores.teamAScore,
-      teamBScore: newScores.teamBScore,
-      turn: (game.turn === "A" ? "B" : "A")
-    });
-
-    setModal(null);
-
-    // Check if all opened
-    const stillClosed = tiles.filter(x => !x.opened && x.id !== t.id);
-    if (stillClosed.length === 0) nav(`/game/${id}/results`);
+  function openTile(t) {
+    if (!t || t.opened) return;
+    nav(`/game/${id}/tile/${t.id}`); // go full-screen question page
   }
 
   if (!game) return null;
@@ -107,7 +92,9 @@ export default function GameRoom() {
             <button className="btn" onClick={()=>nav(-1)}>الرجوع للوحة</button>
             <button className="btn" onClick={()=>nav(`/game/${id}/results`)}>انتهاء اللعبة</button>
           </div>
-          <div className="appbar__title">{game.teamAName && game.teamBName ? `${game.teamAName} × ${game.teamBName}` : "Al Majlis"}</div>
+          <div className="appbar__title">
+            {game.teamAName && game.teamBName ? `${game.teamAName} × ${game.teamBName}` : "Al Majlis"}
+          </div>
           <div className="turn-badge">
             دور فريق: <strong>{game.turn === "A" ? game.teamAName : game.teamBName}</strong>
           </div>
@@ -131,15 +118,18 @@ export default function GameRoom() {
                 {c.imageUrl && <img className="cat-card__img" src={c.imageUrl} alt="" />}
                 <div className="cat-card__label">{c.name}</div>
               </div>
-              {values.map(v => {
-                const t = tiles.find(x => x.categoryPosition === (colIdx + 1) && x.value === v);
+
+              {ROW_VALUES.map((v, rowIdx) => {
+                // Lookup by (categoryPosition, rowIndex)
+                const t = tileIndex.get(`${colIdx + 1}:${rowIdx + 1}`);
                 const opened = t?.opened;
                 return (
                   <button
-                    key={v}
-                    className="value-btn"
-                    onClick={()=>openTile(t)}
+                    key={`${c.position}-${rowIdx}`}
+                    className={`value-btn ${opened ? "is-opened" : ""}`}
+                    onClick={() => openTile(t)}
                     disabled={!t || opened}
+                    aria-label={`افتح سؤال ${v} في ${c.name}`}
                   >
                     {v}
                   </button>
@@ -166,31 +156,6 @@ export default function GameRoom() {
           </div>
         </div>
       </div>
-
-      {/* Question modal */}
-      {modal && (
-        <div className="modal">
-          <div className="modal__head"><strong>{modal.tile.value} نقطة</strong></div>
-          {modal.question.imageUrl && (
-            <img src={modal.question.imageUrl} alt="" className="modal__img" />
-          )}
-          <div className="modal__body">
-            {!modal.revealed ? modal.question.text : `الإجابة: ${modal.question.answer}`}
-          </div>
-          <div className="modal__actions">
-            {!modal.revealed ? (
-              <button className="btn" onClick={()=>setModal(m=>({...m, revealed:true}))}>إظهار الإجابة</button>
-            ) : (
-              <>
-                <button className="btn btn--a" onClick={()=>assign("A")}>لفريق {game.teamAName}</button>
-                <button className="btn btn--b" onClick={()=>assign("B")}>لفريق {game.teamBName}</button>
-                <button className="btn" onClick={()=>assign("none")}>لا أحد</button>
-              </>
-            )}
-            <button className="btn" onClick={()=>setModal(null)}>إغلاق</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

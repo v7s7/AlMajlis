@@ -1,7 +1,306 @@
-.new-wrap{ display:grid; grid-template-columns:2fr 1fr; gap:16px; }
-.cat-select{ display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); margin-top:12px; }
-.cat-btn{ border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; background:#fff; text-align:right; }
-.cat-btn.selected{ outline:3px solid var(--brand-2); }
-.cat-btn img{ width:100%; height:110px; object-fit:cover; display:block; background:#eef1f5; }
-.cat-btn .nm{ padding:8px 10px; font-weight:700; background:#fff; }
-.side-card{ position:sticky; top:16px; }
+/* ===========================
+   Al Majlis — New Game Page
+   newgame.css
+   =========================== */
+
+:root {
+  --bg: #f6f7f8;              /* page background */
+  --panel: #f1f2f4;           /* section container */
+  --card: #ffffff;            /* card surface */
+  --ink: #1f2937;             /* base text */
+  --muted: #6b7280;           /* secondary text */
+  --accent: #f97316;          /* orange brand */
+  --accent-700: #ea580c;
+  --accent-900: #c2410c;
+  --ring: rgba(249, 115, 22, 0.35);
+  --ok: #16a34a;
+  --warn: #ef4444;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.06), 0 6px 18px rgba(17,24,39,.06);
+  --radius-lg: 22px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+
+  /* TV-friendly sizing */
+  --fs-h2: clamp(20px, 2.2vw, 28px);
+  --fs-h3: clamp(16px, 1.6vw, 22px);
+  --fs-base: clamp(14px, 1.2vw, 18px);
+  --fs-tile: clamp(14px, 1.2vw, 18px);
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+}
+
+/* ---------- Page wrapper ---------- */
+.newgame {
+  max-width: 1200px;
+  margin: 24px auto 56px;
+  padding: 0 16px;
+}
+
+.newgame h2 {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  letter-spacing: .2px;
+  margin: 0 0 18px;
+}
+
+/* ---------- Two-column layout ---------- */
+.newgame__layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 980px) {
+  .newgame__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Right sidebar (teams/cta) ---------- */
+.panel {
+  background: var(--card);
+  border: 1px solid #e6e7ea;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 14px;
+}
+
+.panel h3 {
+  font-size: var(--fs-h3);
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+
+.panel input[type="text"],
+.panel input[type="search"],
+.panel input[type="tel"],
+.panel input[type="email"] {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid #e6e7ea;
+  padding: 0 12px;
+  font-size: var(--fs-base);
+  outline: none;
+  background: #fff;
+  transition: box-shadow .15s, border-color .15s;
+}
+
+.panel input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: var(--fs-base);
+  cursor: pointer;
+  transition: filter .15s, transform .03s;
+}
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn:hover { filter: brightness(1.03); }
+.btn:active { transform: translateY(1px); }
+
+/* ---------- Section group (rounded light box) ---------- */
+.section {
+  background: var(--panel);
+  border-radius: 28px;
+  padding: 18px 16px 22px;
+  position: relative;
+  box-shadow: inset 0 0 0 1px #e9eaee;
+  margin-bottom: 18px;
+}
+
+/* top-left minus/expand button (optional) */
+.section__toggle {
+  position: absolute;
+  top: 10px;
+  inset-inline-start: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #e9eaee;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-weight: 900;
+  user-select: none;
+}
+
+/* Centered orange pill title */
+.section__title {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 2px 0 16px;
+}
+.section__title span {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+  font-size: var(--fs-base);
+  line-height: 40px;
+  height: 40px;
+  padding: 0 22px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-1);
+}
+
+/* ---------- Category grid ---------- */
+.category-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+/* ---------- Category card ---------- */
+.category-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  border: 1px solid #e6e7ea;
+  padding: 10px 10px 12px;
+  cursor: pointer;
+  text-align: start; /* honors RTL automatically */
+  transition: border-color .15s, box-shadow .15s, transform .03s;
+  outline: none;
+}
+.category-card:hover {
+  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 12px 24px rgba(17,24,39,.08);
+}
+.category-card:active { transform: translateY(1px); }
+.category-card:focus-visible { box-shadow: 0 0 0 4px var(--ring); }
+
+.category-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring), var(--shadow-1);
+}
+
+/* Image area */
+.category-card__image {
+  width: 100%;
+  height: 140px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  background: #e8eaef;
+  display: block;
+}
+
+/* Orange footer bar with title */
+.category-card__footer {
+  margin-top: 8px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  letter-spacing: .2px;
+  font-size: var(--fs-tile);
+  text-align: center;
+}
+
+/* ---------- Badges ---------- */
+.badge {
+  position: absolute;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Blue "i" badge (top-left) */
+.badge--info {
+  inset: 8px auto auto 8px; /* top / left by default */
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 999px;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(59,130,246,.25);
+}
+
+/* Red remaining ribbon (top-right) */
+.badge--left, .badge--right { top: 6px; }
+.badge--right { inset-inline-end: 8px; }
+.badge--left  { inset-inline-start: 8px; }
+
+.badge--sparkle {
+  background: var(--warn);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(239,68,68,.25);
+}
+/* little sparkle corners */
+.badge--sparkle::before,
+.badge--sparkle::after {
+  content: "✦";
+  font-size: 12px;
+  margin: 0 6px;
+  opacity: .95;
+}
+
+/* ---------- Search input ---------- */
+.input-search {
+  width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #e6e7ea;
+  background: #fff;
+  padding: 0 14px;
+  font-size: var(--fs-base);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+/* ---------- Utilities ---------- */
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px }
+
+.mt-16 { margin-top: 16px; }
+.center { display: grid; place-items: center; }
+
+/* ---------- RTL support ---------- */
+/* Works if you set dir="rtl" on <html> or .newgame.rtl */
+[dir="rtl"] .section__toggle { inset-inline-start: auto; inset-inline-end: 12px; }
+[dir="rtl"] .badge--left  { inset-inline-start: 8px; inset-inline-end: auto; }
+[dir="rtl"] .badge--right { inset-inline-end: 8px; inset-inline-start: auto; }
+
+/* ---------- Focus visibility for keyboard users ---------- */
+:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 4px var(--ring) !important;
+}
+
+/* ---------- Compact mode for smaller phones ---------- */
+@media (max-width: 420px) {
+  :root { --fs-tile: 14px; }
+  .category-card__image { height: 120px; }
+  .category-card__footer { height: 40px; }
+}
