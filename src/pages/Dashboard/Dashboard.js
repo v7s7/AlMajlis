@@ -185,17 +185,20 @@ export default function Dashboard() {
                 </svg>
                 انشئ لعبة جديدة
               </Link>
-              <Link
-  to="/admin"
-  style={styles.chip}
-  onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
-  onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-  onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-  onKeyDown={(e) => ([" ", "Enter"].includes(e.key) && (e.currentTarget.style.transform = "scale(0.98)"))}
-  onKeyUp={(e) => ([" ", "Enter"].includes(e.key) && (e.currentTarget.style.transform = "scale(1)"))}
->
-  لوحة المشرف
-</Link>
+            {role === "admin" && (
+  <Link
+    to="/admin"
+    style={styles.chip}
+    onMouseDown={(e)=>e.currentTarget.style.transform="scale(0.98)"}
+    onMouseUp={(e)=>e.currentTarget.style.transform="scale(1)"}
+    onMouseLeave={(e)=>e.currentTarget.style.transform="scale(1)"}
+    onKeyDown={(e)=>([" ","Enter"].includes(e.key) && (e.currentTarget.style.transform="scale(0.98)"))}
+    onKeyUp={(e)=>([" ","Enter"].includes(e.key) && (e.currentTarget.style.transform="scale(1)"))}
+  >
+    لوحة المشرف
+  </Link>
+)}
+
 
 <button
   onClick={handleSignOut}
