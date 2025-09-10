@@ -1,83 +1,75 @@
 /* Page */
-.apage { min-height:100vh; background:#f5f6f7; color:#111827; }
-.container { max-width: 1440px; margin: 0 auto; padding: 0 20px; }
-.alayout { display:grid; grid-template-columns: 1fr 320px; gap:18px; }
-@media (max-width: 1200px){ .alayout{ grid-template-columns: 1fr; } }
+.apage { min-height:100vh; background:#eaf2ff; color:#0f172a; }
+.container { max-width:1440px; margin:0 auto; padding:0 20px; }
 
-/* Top bar */
+/* Top bar — same gradient, scale, chips */
 .abar{
-  background: linear-gradient(90deg,#ef4444 0%, #f97316 100%);
-  color:#fff; padding: 10px 16px;
+  background: linear-gradient(90deg,#9ec5ff 0%, #8fd3ff 100%);
+  color:#fff; padding:10px 16px;
   display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
 }
-.abar__left{ justify-self:start; display:flex; gap:10px; }
-.abar__center{ justify-self:center; font-weight:900; font-size: clamp(18px,2.2vw,28px); }
-.abar__right{ justify-self:end; }
+.abar__left{ justify-self:start; display:flex; gap:10px; align-items:center; }
+.abar__center{ justify-self:center; font-weight:900; font-size:clamp(18px,2.2vw,28px); }
+.abar__right{ justify-self:end; display:flex; align-items:center; }
 .iconbtn{
   background:#ffffff22; color:#fff; border:1px solid #ffffff55;
-  border-radius:999px; padding:8px 12px; font-weight:800; cursor:pointer; transition:none;
+  border-radius:999px; padding:8px 12px; font-weight:800; cursor:pointer;
 }
-.turnchip{ background:#7f1d1d; padding:8px 14px; border-radius:999px; font-weight:900; }
+.iconbtn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
 
-/* Stage */
+/* Points chip — identical to question page */
+.pointchip{
+  background:#1d4ed8; color:#fff; border-radius:12px;
+  padding:8px 14px; font-weight:900; font-size:14px;
+  box-shadow:0 10px 20px rgba(29,78,216,.25);
+}
+
+/* Stage — identical shape/border/shadow and min-height */
 .astage{
   position:relative;
-  background:#fff; border-radius:28px; border:3px solid #ef4444;
-  box-shadow: 0 12px 36px rgba(0,0,0,.08);
-  margin-top:14px; padding: clamp(22px,2.4vw,36px);
-  min-height: calc(100vh - 160px);
+  background:#fff; border-radius:28px; border:3px solid #1d4ed8;
+  box-shadow:0 12px 36px rgba(0,0,0,.08);
+  margin-top:14px; padding:clamp(22px,2.4vw,36px);
+  min-height:calc(100vh - 160px);
   display:flex; flex-direction:column; align-items:center; gap:18px;
-}
-.pointchip{
-  position:absolute; top:-16px; inset-inline-end:44px;
-  background:#0b0b0f; color:#fff; border-radius:12px; padding:8px 14px; font-weight:900;
-}
-.atitle{
-  font-size: clamp(26px,3vw,40px); font-weight:900; text-align:center; margin:6px 0 8px;
-}
-.aimage{
-  width:min(820px,92%); max-height:460px; object-fit:cover; border-radius:10px;
+  justify-content:center; /* center vertically (no image on answer page) */
 }
 
-/* Corner chips (bottom corners) */
-.cornerchip{
-  position:absolute; bottom:-20px; padding:10px 18px; border-radius:999px;
-  color:#fff; font-weight:900; box-shadow: 0 8px 18px rgba(0,0,0,.15);
-  border:0; cursor:pointer; transition:none;
+/* Answer text — same scale as .qtext */
+.answer{
+  font-size:clamp(26px,3.2vw,42px);
+  font-weight:900; line-height:1.35; text-align:center;
+  margin:6px 8px 10px;
+  word-break:break-word; overflow-wrap:anywhere;
 }
-.cornerchip--left{ inset-inline-start:18px; background:#1664d8; }  /* أي فريق؟ */
-.cornerchip--right{ inset-inline-end:18px; background:#be1111; display:flex; align-items:center; gap:8px; }
-.cornerchip .arrow{ display:inline-block; background:#fff; color:#be1111; border-radius:999px; width:24px; height:24px; line-height:24px; text-align:center; font-weight:900; }
 
-/* Bottom action dock (assignment pills) */
-.actiondock{
+/* Action buttons row — placed bottom-right like the question page action dock */
+.assignrow{
   position:absolute; bottom:16px; inset-inline-end:24px;
   display:flex; gap:10px; flex-wrap:wrap; align-items:center;
 }
-.pill{
-  height:44px; padding:0 16px; border-radius:999px; border:0; color:#fff; font-weight:900; cursor:pointer; transition:none;
-  box-shadow: 0 6px 14px rgba(0,0,0,.12);
-}
-.pill--a{ background:#1d4ed8; }
-.pill--b{ background:#16a34a; }
-.pill--none{ background:#fb923c; color:#fff; }
 
-/* Sidebar score cards */
-.aside{ display:flex; flex-direction:column; gap:18px; margin-top:14px; }
-.scorecard{
-  background:#fff; border-radius:999px; border:2px solid #ef4444; padding:12px 16px;
-  box-shadow: 0 10px 22px rgba(0,0,0,.08);
+/* Buttons — same pills as question page (.pill) */
+.btn{
+  height:44px; padding:0 16px; border-radius:999px; border:0;
+  color:#fff; font-weight:900; cursor:pointer;
+  box-shadow:0 6px 14px rgba(0,0,0,.12);
 }
-.scorecard.is-turn{ background:#7f1d1d; color:#fff; }
-.scorecard__head{
-  text-align:center; font-weight:900; padding:8px 10px; border-radius:999px; background:#991b1b; color:#fff;
-}
-.scorecard.is-turn .scorecard__head{ background:#b91c1c; }
-.scorecard__score{ text-align:center; font-size:40px; font-weight:900; margin:6px 0; }
-.scorecard__helpers{ text-align:center; font-weight:800; margin-top:4px; }
-.helpersrow{ display:flex; justify-content:center; gap:12px; margin-top:8px; }
-.helperico{ width:42px; height:42px; border-radius:999px; display:grid; place-items:center; border:2px solid #ef4444; color:#ef4444; font-weight:900; }
-.scorecard.is-turn .helperico{ border-color:#fff; color:#fff; }
+.btn:hover{ filter:brightness(0.96); }
+.btn:active{ transform:translateY(1px); }
+.btn:focus-visible{ outline:2px solid #1d4ed8; outline-offset:2px; }
 
-/* Accessibility */
-:focus-visible{ outline:none !important; box-shadow:0 0 0 4px rgba(249,115,22,.35) !important; border-radius:12px; }
+/* Team colors — exact mapping */
+.btn--a{ background:#1d4ed8; }   /* Team A (blue) */
+.btn--b{ background:#16a34a; }   /* Team B (green) */
+/* The "no one" button in your JSX has class .btn only; keep it readable: */
+.assignrow .btn:not(.btn--a):not(.btn--b){ background:#60a5fa; color:#fff; }
+
+/* RTL niceties */
+[dir="rtl"] .assignrow{ inset-inline-start:24px; inset-inline-end:auto; }
+
+/* Small screens parity */
+@media (max-width:600px){
+  .pointchip{ font-size:13px; padding:8px 12px; }
+  .answer{ font-size:clamp(22px,5.2vw,36px); }
+}

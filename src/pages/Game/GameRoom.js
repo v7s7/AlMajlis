@@ -3,9 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import {
-  doc, onSnapshot, collection, getDocs, getDoc
+  doc, onSnapshot, collection, getDocs, getDoc, updateDoc
 } from "firebase/firestore";
-import "../../styles/game.css";
 
 function Timer() {
   const [ms, setMs] = useState(0);
@@ -23,6 +22,56 @@ function Timer() {
       <span className="timer__display">{mm}:{ss}</span>
       <button className="btn" onClick={()=>setRunning(v=>!v)}>{running ? "إيقاف" : "بدء"}</button>
       <button className="btn" onClick={()=>setMs(0)}>إعادة الضبط</button>
+    </div>
+  );
+}
+
+/** بطاقة نقاط بسيطة: زر -50 وزر +50 */
+function ScoreCard({ name, score, onMinus, onPlus }) {
+  const wrap = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    background: "#fff",
+    border: "1px solid var(--border)",
+    borderRadius: 16,
+    padding: "10px 12px",
+    boxShadow: "0 2px 6px rgba(0,0,0,.06)",
+  };
+  const left = { display: "flex", alignItems: "center", gap: 10 };
+  const team = {
+    background: "var(--brand-pill)",
+    color: "#fff",
+    padding: "6px 14px",
+    borderRadius: 999,
+    fontWeight: 900,
+    border: "1px solid #1e3a8a",
+  };
+  const points = { fontSize: 28, fontWeight: 900, color: "var(--text-color)" };
+  const actions = { display: "flex", gap: 8 };
+  const btn = {
+    minWidth: 56,
+    height: 44,
+    borderRadius: 12,
+    border: "1px solid var(--border)",
+    background: "#f8fbff",
+    color: "#0f172a",
+    fontWeight: 800,
+    cursor: "pointer",
+  };
+  const btnPrimary = { ...btn, background: "var(--brand-1)", color: "#fff", borderColor: "#1e40af" };
+
+  return (
+    <div style={wrap} role="group" aria-label={`نقاط ${name}`}>
+      <div style={left}>
+        <span style={team}>{name}</span>
+        <span style={points}>{score}</span>
+      </div>
+      <div style={actions}>
+        <button style={btn} onClick={onMinus} aria-label="طرح 50">-</button>
+        <button style={btnPrimary} onClick={onPlus} aria-label="إضافة 50">+</button>
+      </div>
     </div>
   );
 }
@@ -69,16 +118,26 @@ export default function GameRoom() {
   // Fast lookup: "catPos:rowIndex" -> tile
   const tileIndex = useMemo(() => {
     const m = new Map();
-    for (const t of tiles) {
-      // categoryPosition and rowIndex are 1-based in seeding
-      m.set(`${t.categoryPosition}:${t.rowIndex}`, t);
-    }
+    for (const t of tiles) m.set(`${t.categoryPosition}:${t.rowIndex}`, t);
     return m;
   }, [tiles]);
 
   function openTile(t) {
     if (!t || t.opened) return;
-    nav(`/game/${id}/tile/${t.id}`); // go full-screen question page
+    nav(`/game/${id}/tile/${t.id}`);
+  }
+
+  async function adjustScore(teamKey, delta) {
+    const gRef = doc(db, "games", id);
+    const nextA = Math.max(0, (game.teamAScore || 0) + (teamKey === "A" ? delta : 0));
+    const nextB = Math.max(0, (game.teamBScore || 0) + (teamKey === "B" ? delta : 0));
+    try {
+      await updateDoc(gRef, { teamAScore: nextA, teamBScore: nextB });
+      setGame((old) => ({ ...old, teamAScore: nextA, teamBScore: nextB }));
+    } catch (e) {
+      alert("تعذّر تعديل النقاط. جرّب مرّة ثانية.");
+      console.error(e);
+    }
   }
 
   if (!game) return null;
@@ -89,14 +148,14 @@ export default function GameRoom() {
       <div className="appbar">
         <div className="appbar__row container">
           <div className="appbar__actions">
-            <button className="btn" onClick={()=>nav(-1)}>الرجوع للوحة</button>
-            <button className="btn" onClick={()=>nav(`/game/${id}/results`)}>انتهاء اللعبة</button>
+            <button className="btn" onClick={()=>nav(-1)}>رجوع</button>
+            <button className="btn" onClick={()=>nav(`/game/${id}/results`)}>إنهاء اللعبة</button>
           </div>
           <div className="appbar__title">
             {game.teamAName && game.teamBName ? `${game.teamAName} × ${game.teamBName}` : "Al Majlis"}
           </div>
           <div className="turn-badge">
-            دور فريق: <strong>{game.turn === "A" ? game.teamAName : game.teamBName}</strong>
+            الدور: <strong>{game.turn === "A" ? game.teamAName : game.teamBName}</strong>
           </div>
         </div>
       </div>
@@ -104,10 +163,7 @@ export default function GameRoom() {
       <div className="container">
         {/* Timer & End */}
         <div className="controls">
-          <Timer />
-          <div>
-            <button className="btn" onClick={()=>nav(`/game/${id}/results`)}>إنهاء مبكر</button>
-          </div>
+          
         </div>
 
         {/* Board */}
@@ -120,7 +176,6 @@ export default function GameRoom() {
               </div>
 
               {ROW_VALUES.map((v, rowIdx) => {
-                // Lookup by (categoryPosition, rowIndex)
                 const t = tileIndex.get(`${colIdx + 1}:${rowIdx + 1}`);
                 const opened = t?.opened;
                 return (
@@ -139,21 +194,20 @@ export default function GameRoom() {
           ))}
         </div>
 
-        {/* Footer scores */}
-        <div className="footer">
-          <div className="team-panel">
-            <button className="score-btn">−</button>
-            <div className="team-name">{game.teamBName}</div>
-            <div className="score">{game.teamBScore || 0}</div>
-            <button className="score-btn">＋</button>
-          </div>
-          <div className="helpers">وسائل المساعدة</div>
-          <div className="team-panel">
-            <button className="score-btn">−</button>
-            <div className="team-name">{game.teamAName}</div>
-            <div className="score">{game.teamAScore || 0}</div>
-            <button className="score-btn">＋</button>
-          </div>
+        {/* Scores: أزرار -50 و +50 فقط */}
+        <div className="footer" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <ScoreCard
+            name={game.teamAName}
+            score={game.teamAScore || 0}
+            onMinus={() => adjustScore("A", -50)}
+            onPlus={() => adjustScore("A", +50)}
+          />
+          <ScoreCard
+            name={game.teamBName}
+            score={game.teamBScore || 0}
+            onMinus={() => adjustScore("B", -50)}
+            onPlus={() => adjustScore("B", +50)}
+          />
         </div>
       </div>
     </>

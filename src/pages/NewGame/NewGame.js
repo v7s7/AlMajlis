@@ -169,7 +169,6 @@ export default function NewGame() {
 
   return (
     <div className="newgame">
-  <h2>New Game</h2>
 
   <div className="newgame__layout">
     <div>

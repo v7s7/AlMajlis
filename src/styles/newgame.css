@@ -1,21 +1,26 @@
 /* ===========================
    Al Majlis — New Game Page
-   newgame.css
+   newgame.css (Light Blue theme)
    =========================== */
 
 :root {
-  --bg: #f6f7f8;              /* page background */
-  --panel: #f1f2f4;           /* section container */
-  --card: #ffffff;            /* card surface */
-  --ink: #1f2937;             /* base text */
-  --muted: #6b7280;           /* secondary text */
-  --accent: #f97316;          /* orange brand */
-  --accent-700: #ea580c;
-  --accent-900: #c2410c;
-  --ring: rgba(249, 115, 22, 0.35);
+  /* Light blue palette to match Dashboard */
+  --bg: #eaf2ff;             /* page background */
+  --panel: #edf5ff;          /* section container */
+  --card: #ffffff;           /* card surface */
+
+  --ink: #0f172a;            /* base text */
+  --muted: #64748b;          /* secondary text */
+
+  --accent: #1d4ed8;         /* primary blue */
+  --accent-700: #1e40af;
+  --accent-900: #1e3a8a;
+  --ring: rgba(29, 78, 216, 0.28); /* blue focus ring */
+
   --ok: #16a34a;
   --warn: #ef4444;
-  --shadow-1: 0 1px 2px rgba(0,0,0,.06), 0 6px 18px rgba(17,24,39,.06);
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.06), 0 6px 18px rgba(15,23,42,.08);
   --radius-lg: 22px;
   --radius-md: 14px;
   --radius-sm: 10px;
@@ -53,26 +58,23 @@ html, body {
   grid-template-columns: 2fr 1fr;
   gap: 16px;
 }
-
 @media (max-width: 980px) {
-  .newgame__layout {
-    grid-template-columns: 1fr;
-  }
+  .newgame__layout { grid-template-columns: 1fr; }
 }
 
 /* ---------- Right sidebar (teams/cta) ---------- */
 .panel {
   background: var(--card);
-  border: 1px solid #e6e7ea;
+  border: 1px solid #dbeafe;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
   padding: 14px;
 }
-
 .panel h3 {
   font-size: var(--fs-h3);
   margin: 0 0 10px;
   font-weight: 700;
+  color: var(--sub, var(--accent-900));
 }
 
 .panel input[type="text"],
@@ -82,19 +84,19 @@ html, body {
   width: 100%;
   height: 44px;
   border-radius: 12px;
-  border: 1px solid #e6e7ea;
+  border: 1px solid #c7d2fe;
   padding: 0 12px;
   font-size: var(--fs-base);
   outline: none;
   background: #fff;
   transition: box-shadow .15s, border-color .15s;
 }
-
 .panel input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--ring);
 }
 
+/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -102,29 +104,28 @@ html, body {
   height: 44px;
   padding: 0 16px;
   border-radius: 12px;
-  border: 0;
+  border: 1px solid var(--accent-700);
   background: var(--accent);
   color: #fff;
-  font-weight: 700;
+  font-weight: 800;
   font-size: var(--fs-base);
   cursor: pointer;
-  transition: filter .15s, transform .03s;
+  transition: filter .15s, transform .03s, box-shadow .15s;
+  box-shadow: 0 10px 24px rgba(29,78,216,.18);
 }
 .btn:disabled { opacity: .6; cursor: not-allowed; }
 .btn:hover { filter: brightness(1.03); }
 .btn:active { transform: translateY(1px); }
 
-/* ---------- Section group (rounded light box) ---------- */
+/* ---------- Section group ---------- */
 .section {
   background: var(--panel);
   border-radius: 28px;
   padding: 18px 16px 22px;
   position: relative;
-  box-shadow: inset 0 0 0 1px #e9eaee;
+  box-shadow: inset 0 0 0 1px #dbeafe;
   margin-bottom: 18px;
 }
-
-/* top-left minus/expand button (optional) */
 .section__toggle {
   position: absolute;
   top: 10px;
@@ -132,7 +133,7 @@ html, body {
   width: 36px;
   height: 36px;
   border-radius: 999px;
-  background: #e9eaee;
+  background: #e2ecff;
   display: grid;
   place-items: center;
   color: var(--muted);
@@ -140,7 +141,7 @@ html, body {
   user-select: none;
 }
 
-/* Centered orange pill title */
+/* Centered pill title (blue) */
 .section__title {
   position: relative;
   display: grid;
@@ -156,7 +157,7 @@ html, body {
   height: 40px;
   padding: 0 22px;
   border-radius: 999px;
-  box-shadow: var(--shadow-1);
+  box-shadow: 0 6px 18px rgba(29,78,216,.18);
 }
 
 /* ---------- Category grid ---------- */
@@ -172,15 +173,15 @@ html, body {
   border-radius: var(--radius-lg);
   background: var(--card);
   box-shadow: var(--shadow-1);
-  border: 1px solid #e6e7ea;
+  border: 1px solid #dbeafe;
   padding: 10px 10px 12px;
   cursor: pointer;
-  text-align: start; /* honors RTL automatically */
+  text-align: start;
   transition: border-color .15s, box-shadow .15s, transform .03s;
   outline: none;
 }
 .category-card:hover {
-  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 12px 24px rgba(17,24,39,.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 12px 24px rgba(15,23,42,.10);
 }
 .category-card:active { transform: translateY(1px); }
 .category-card:focus-visible { box-shadow: 0 0 0 4px var(--ring); }
@@ -196,11 +197,11 @@ html, body {
   height: 140px;
   border-radius: var(--radius-md);
   object-fit: cover;
-  background: #e8eaef;
+  background: #e6efff;
   display: block;
 }
 
-/* Orange footer bar with title */
+/* Blue footer bar with title */
 .category-card__footer {
   margin-top: 8px;
   height: 42px;
@@ -226,20 +227,20 @@ html, body {
   user-select: none;
 }
 
-/* Blue "i" badge (top-left) */
+/* Info badge (blue) */
 .badge--info {
-  inset: 8px auto auto 8px; /* top / left by default */
+  inset: 8px auto auto 8px;
   inline-size: 26px;
   block-size: 26px;
   border-radius: 999px;
-  background: #3b82f6;
+  background: var(--accent);
   color: #fff;
   font-weight: 800;
   font-size: 14px;
-  box-shadow: 0 2px 6px rgba(59,130,246,.25);
+  box-shadow: 0 2px 6px rgba(29,78,216,.25);
 }
 
-/* Red remaining ribbon (top-right) */
+/* Side ribbons */
 .badge--left, .badge--right { top: 6px; }
 .badge--right { inset-inline-end: 8px; }
 .badge--left  { inset-inline-start: 8px; }
@@ -253,7 +254,6 @@ html, body {
   font-weight: 800;
   box-shadow: 0 2px 6px rgba(239,68,68,.25);
 }
-/* little sparkle corners */
 .badge--sparkle::before,
 .badge--sparkle::after {
   content: "✦";
@@ -267,7 +267,7 @@ html, body {
   width: 100%;
   height: 46px;
   border-radius: 12px;
-  border: 1px solid #e6e7ea;
+  border: 1px solid #c7d2fe;
   background: #fff;
   padding: 0 14px;
   font-size: var(--fs-base);
@@ -282,23 +282,21 @@ html, body {
 /* ---------- Utilities ---------- */
 .mt-8 { margin-top: 8px; }
 .mt-12 { margin-top: 12px }
-
 .mt-16 { margin-top: 16px; }
 .center { display: grid; place-items: center; }
 
 /* ---------- RTL support ---------- */
-/* Works if you set dir="rtl" on <html> or .newgame.rtl */
 [dir="rtl"] .section__toggle { inset-inline-start: auto; inset-inline-end: 12px; }
 [dir="rtl"] .badge--left  { inset-inline-start: 8px; inset-inline-end: auto; }
 [dir="rtl"] .badge--right { inset-inline-end: 8px; inset-inline-start: auto; }
 
-/* ---------- Focus visibility for keyboard users ---------- */
+/* ---------- Focus visibility ---------- */
 :focus-visible {
   outline: none !important;
   box-shadow: 0 0 0 4px var(--ring) !important;
 }
 
-/* ---------- Compact mode for smaller phones ---------- */
+/* ---------- Compact mode ---------- */
 @media (max-width: 420px) {
   :root { --fs-tile: 14px; }
   .category-card__image { height: 120px; }
