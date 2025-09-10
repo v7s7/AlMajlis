@@ -1,5 +1,5 @@
 // src/pages/NewGame/NewGame.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import {
@@ -12,11 +12,13 @@ import {
   serverTimestamp,
   setDoc,
   where,
+  getCountFromServer,
 } from "firebase/firestore";
 import "../../styles/newgame.css";
 
 export default function NewGame() {
   const [cats, setCats] = useState([]);
+  const [catsLoading, setCatsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sel, setSel] = useState([]); // categoryIds
   const [teamA, setTeamA] = useState("Team A");
@@ -25,14 +27,31 @@ export default function NewGame() {
   const nav = useNavigate();
   const user = window.__ALMAJLIS__?.user;
 
+  // ---------- Debounced search ----------
+  const [queryText, setQueryText] = useState("");
+  const searchTimer = useRef(null);
   useEffect(() => {
-    (async () => {
-      const snap = await getDocs(query(collection(db, "categories"), orderBy("name")));
-      let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (search) rows = rows.filter((c) => c.name?.toLowerCase().includes(search.toLowerCase()));
-      setCats(rows);
-    })();
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setQueryText(search.trim().toLowerCase()), 250);
+    return () => searchTimer.current && clearTimeout(searchTimer.current);
   }, [search]);
+
+  // ---------- Load + filter categories ----------
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCatsLoading(true);
+      const snap = await getDocs(query(collection(db, "categories"), orderBy("name")));
+      if (cancelled) return;
+      let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (queryText) rows = rows.filter((c) => c.name?.toLowerCase().includes(queryText));
+      setCats(rows);
+      setCatsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [queryText]);
 
   function toggle(id) {
     setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 6 ? [...s, id] : s));
@@ -47,7 +66,7 @@ export default function NewGame() {
     { value: 400, index: 1 },
     { value: 600, index: 0 },
     { value: 600, index: 1 },
-  ]; // rowIndex 1..6
+  ];
 
   async function fetchQuestions(categoryId, value) {
     const qy = query(
@@ -71,22 +90,35 @@ export default function NewGame() {
   }
 
   async function validateStock(categoryIds) {
-    // Ensure each selected category has at least TWO questions per value
     for (const id of categoryIds) {
       for (const v of VALUES) {
-        const all = await fetchQuestions(id, v);
-        if (all.length < 2) {
-          return {
-            ok: false,
-            message: `Category is missing questions: need at least 2 for ${v} in category "${cats.find(c=>c.id===id)?.name || id}".`,
-          };
+        const qy = query(
+          collection(db, "questions"),
+          where("categoryId", "==", id),
+          where("value", "==", v),
+          where("isActive", "==", true)
+        );
+        const count = (await getCountFromServer(qy)).data().count || 0;
+        if (count < 2) {
+          const name = cats.find((c) => c.id === id)?.name || id;
+          return { ok: false, message: `Category "${name}" needs at least 2 questions for ${v}.` };
         }
       }
     }
     return { ok: true };
   }
 
-  // ----- Start flow -----
+  const canStart = useMemo(
+    () =>
+      !!user?.uid &&
+      sel.length >= 1 &&
+      sel.length <= 6 &&
+      teamA.trim().length > 0 &&
+      teamB.trim().length > 0 &&
+      !busy,
+    [user?.uid, sel.length, teamA, teamB, busy]
+  );
+
   async function start() {
     if (!user?.uid) return alert("You must be signed in.");
     if (sel.length < 1) return alert("Pick at least 1 category (up to 6).");
@@ -94,7 +126,6 @@ export default function NewGame() {
     setBusy(true);
 
     try {
-      // Validate stock (2 per value per category)
       const check = await validateStock(sel);
       if (!check.ok) {
         alert(check.message);
@@ -102,12 +133,11 @@ export default function NewGame() {
         return;
       }
 
-      // Create game (pending)
       const gameRef = await addDoc(collection(db, "games"), {
         hostUserId: user.uid,
         status: "pending",
-        teamAName: teamA,
-        teamBName: teamB,
+        teamAName: teamA.trim(),
+        teamBName: teamB.trim(),
         teamAScore: 0,
         teamBScore: 0,
         turn: "A",
@@ -115,22 +145,17 @@ export default function NewGame() {
         endedAt: null,
       });
 
-      // game_categories (ordered)
       const gcCol = collection(gameRef, "game_categories");
       for (let i = 0; i < sel.length; i++) {
         await addDoc(gcCol, { position: i + 1, categoryId: sel[i] });
       }
 
-      // game_tiles: for each category, create 6 tiles [200a,200b,400a,400b,600a,600b]
       const tilesCol = collection(gameRef, "game_tiles");
       for (let catPos = 0; catPos < sel.length; catPos++) {
         const categoryId = sel[catPos];
-
-        // Build buckets value -> two sampled questions
         const buckets = new Map();
         for (const v of VALUES) {
           const all = await fetchQuestions(categoryId, v);
-          // We validated already; still guard:
           if (all.length < 2) {
             throw new Error(
               `Not enough questions after validation for category ${categoryId}, value ${v}.`
@@ -139,15 +164,14 @@ export default function NewGame() {
           buckets.set(v, sampleK(all, 2));
         }
 
-        // Write six tiles with rowIndex 1..6
         for (let row = 0; row < SEQUENCE.length; row++) {
           const { value, index } = SEQUENCE[row];
           const qpick = buckets.get(value)[index];
 
           await addDoc(tilesCol, {
-            categoryPosition: catPos + 1, // 1-based
-            rowIndex: row + 1, // 1..6
-            value, // 200/400/600
+            categoryPosition: catPos + 1,
+            rowIndex: row + 1,
+            value,
             opened: false,
             questionId: qpick.id,
             answeredBy: null,
@@ -156,7 +180,6 @@ export default function NewGame() {
         }
       }
 
-      // Activate game
       await setDoc(doc(db, "games", gameRef.id), { status: "active" }, { merge: true });
       nav(`/game/${gameRef.id}`);
     } catch (e) {
@@ -167,50 +190,107 @@ export default function NewGame() {
     }
   }
 
+  const selectedNames = useMemo(
+    () => sel.map((id) => cats.find((c) => c.id === id)?.name || id),
+    [sel, cats]
+  );
+  const progressPct = (sel.length / 6) * 100;
+
   return (
     <div className="newgame">
+      <div className="newgame__layout">
+        {/* Left column */}
+        <div>
+          <input
+            className="input-search"
+            placeholder="Search categories…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-  <div className="newgame__layout">
-    <div>
-      <input
-        className="input-search"
-        placeholder="Search categories…"
-        value={search}
-        onChange={(e)=>setSearch(e.target.value)}
-      />
+          <div className="mt-12" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ minWidth: 120, fontWeight: 700 }}>
+              Selected: {sel.length} / 6
+            </div>
+            
+          </div>
 
-      <div className="section mt-16">
-        {/* <div className="section__title"><span>تفكير</span></div> */}
+          {sel.length > 0 && (
+            <div className="mt-8" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {selectedNames.map((n, i) => (
+                <button
+                  key={sel[i]}
+                  onClick={() => toggle(sel[i])}
+                  className="chip chip--selected"
+                  title="Remove"
+                >
+                  {n} ✕
+                </button>
+              ))}
+            </div>
+          )}
 
-        <div className="category-grid">
-          {cats.map(c => (
-            <button
-              key={c.id}
-              onClick={()=>toggle(c.id)}
-              className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
-            >
-              {/* optional remaining: <span className="badge badge--right badge--sparkle">باقي 61 لعبة</span> */}
-              {c.imageUrl && <img alt="" src={c.imageUrl} className="category-card__image" />}
-              <div className="category-card__footer">{c.name}</div>
+          <div className="section mt-16">
+            {cats.length === 0 && !catsLoading ? (
+              <div className="mt-12" style={{ color: "#6b7280" }}>
+                لا توجد فئات مطابقة لبحثك.
+              </div>
+            ) : (
+              <div className="category-grid">
+                {cats.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => toggle(c.id)}
+                    className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
+                    title={c.name}
+                  >
+                    {c.imageUrl ? (
+                      <img
+                        alt=""
+                        src={c.imageUrl}
+                        className="category-card__image"
+                        onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                      />
+                    ) : null}
+                    <div className="category-card__footer">{c.name}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div>
+          <div className="panel">
+            <h3 dir="ltr">Teams</h3>
+            <input
+  className="auth-input mt-8"
+  value={teamA}
+  onChange={(e) => setTeamA(e.target.value)}
+  placeholder="Team A"
+  dir="ltr"
+/>
+
+<input
+  className="auth-input mt-8"
+  value={teamB}
+  onChange={(e) => setTeamB(e.target.value)}
+  placeholder="Team B"
+  dir="ltr"
+/>
+
+            <button className="btn mt-12" onClick={start} disabled={!canStart}>
+              {busy ? "Starting…" : "Start Game"}
             </button>
-          ))}
+            {!user?.uid && (
+              <div className="mt-8" style={{ color: "#ef4444", fontWeight: 700 }}>
+                Sign in to start a game.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
-
-    <div>
-      <div className="panel">
-        <h3>Teams</h3>
-        <input className="mt-8" value={teamA} onChange={e=>setTeamA(e.target.value)} placeholder="Team A" />
-        <input className="mt-8" value={teamB} onChange={e=>setTeamB(e.target.value)} placeholder="Team B" />
-        <div className="mt-8">Selected: {sel.length} / 6</div>
-        <button className="btn mt-12" onClick={start} disabled={busy}>
-          {busy ? "Starting…" : "Start Game"}
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
   );
 }

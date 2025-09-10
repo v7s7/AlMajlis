@@ -104,8 +104,8 @@ export default function AnswerPage() {
         <div className="answer">الإجابة: <strong>{question.answer}</strong></div>
 
         <div className="assignrow">
-          <button className="btn btn--a" disabled={busy} onClick={() => assign("A")}>لفريق {game.teamAName}</button>
-          <button className="btn btn--b" disabled={busy} onClick={() => assign("B")}>لفريق {game.teamBName}</button>
+          <button className="btn btn--a" disabled={busy} onClick={() => assign("A")}> {game.teamAName}</button>
+          <button className="btn btn--b" disabled={busy} onClick={() => assign("B")}> {game.teamBName}</button>
           <button className="btn" disabled={busy} onClick={() => assign("none")}>لا أحد</button>
         </div>
       </div>
