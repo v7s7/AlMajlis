@@ -1,9 +1,9 @@
 // src/pages/Dashboard.jsx
 import { Link, useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
-import { auth } from "../../firebase";
-import { useMemo, useState, useCallback } from "react";
-
+import { signOut, onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../../firebase";
+import { useMemo, useState, useCallback, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
 const styles = {
   page: {
     minHeight: "100vh",
@@ -62,7 +62,7 @@ const styles = {
     color: "#475569",
     fontWeight: 800,
   },
-  name: { fontWeight: 700, color: "#0f172a" },
+  name: { fontSize: 20, fontWeight: 700, color: "#0f172a" },
   chips: { display: "flex", alignItems: "center", gap: 10 },
 
   // Primary CTA stays as-is
@@ -153,7 +153,23 @@ export default function Dashboard() {
   const role = useMemo(() => window.__ALMAJLIS__?.role || "user", []);
   const nav = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
-
+  const [userName, setUserName] = useState("");
+useEffect(() => {
+  const unsub = onAuthStateChanged(auth, async (user) => {
+    if (!user) { setUserName(""); return; }
+    let name = (user.displayName || "").trim();
+    if (!name) {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        name = snap.exists() ? (snap.data()?.name || "").trim() : "";
+      } catch {
+        name = "";
+      }
+    }
+    setUserName(name);
+  });
+  return () => unsub();
+}, []);
   const handleSignOut = useCallback(async () => {
     try { setSigningOut(true); await signOut(auth); nav("/login"); }
     catch { setSigningOut(false); alert("صار خلل بالخروج. جرّب مرّة ثانية."); }
@@ -177,7 +193,7 @@ export default function Dashboard() {
 
           {/* User & chips (يسار) */}
           <div style={styles.leftUser}>
-            <div style={styles.name}>UserName</div>
+<div style={styles.name}>أهلا , {userName || "ضيف"}</div>
             <div style={styles.chips}>
               <Link to="/new" style={styles.chipPrimary}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">

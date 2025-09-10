@@ -7,13 +7,15 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 import "../../styles/auth.css";
 
 export default function Login() {
   const [mode, setMode] = useState("login"); // or "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");       // NEW
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [err, setErr] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -38,17 +40,22 @@ export default function Login() {
           setSubmitting(false);
           return;
         }
+        if (!phone || !isValidPhoneNumber(phone)) {
+          setErr("رقم الهاتف غير صالح");
+          setSubmitting(false);
+          return;
+        }
 
         const cred = await createUserWithEmailAndPassword(auth, email, password);
 
         // Save profile fields in Auth
         await updateProfile(cred.user, { displayName: trimmedName });
 
-        // Save user doc in Firestore
+        // Save user doc in Firestore (store E.164 like +973xxxxxxx)
         await setDoc(doc(db, "users", cred.user.uid), {
           name: trimmedName,
           email,
-          phone: phone || "",
+          phone,
           role: "user",
           createdAt: serverTimestamp(),
         });
@@ -78,55 +85,60 @@ export default function Login() {
             {mode === "login" ? "تسجيل الدخول" : "إنشاء حساب"}
           </h2>
 
-        <form onSubmit={onSubmit} className="lcard__form">
-  {mode === "signup" && (
-    <input
-      className="linput linput--ltr"
-      placeholder="Name"
-      type="text"
-      autoComplete="name"
-      dir="ltr"
-      value={name}
-      onChange={(e) => setName(e.target.value)}
-      required
-    />
-  )}
+          <form onSubmit={onSubmit} className="lcard__form">
+            {mode === "signup" && (
+              <input
+                className="linput linput--ltr"
+                placeholder="Name"
+                type="text"
+                autoComplete="name"
+                dir="ltr"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            )}
 
-  <input
-    className="linput linput--ltr"
-    placeholder="Email"
-    type="email"
-    inputMode="email"
-    autoComplete="email"
-    dir="ltr"
-    value={email}
-    onChange={(e) => setEmail(e.target.value)}
-    required
-  />
+            <input
+              className="linput linput--ltr"
+              placeholder="Email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              dir="ltr"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-  <input
-    className="linput linput--ltr"
-    type="password"
-    placeholder="Password"
-    autoComplete={mode === "login" ? "current-password" : "new-password"}
-    dir="ltr"
-    value={password}
-    onChange={(e) => setPassword(e.target.value)}
-    required
-  />
+            <input
+              className="linput linput--ltr"
+              type="password"
+              placeholder="Password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              dir="ltr"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
-  {mode === "signup" && (
-    <input
-      className="linput linput--ltr"
-      placeholder="Phone (اختياري)"
-      type="tel"
-      inputMode="tel"
-      autoComplete="tel"
-      dir="ltr"
-      value={phone}
-      onChange={(e) => setPhone(e.target.value)}
-    />
-  )}
+            {mode === "signup" && (
+              <div className="linput linput--ltr" style={{ direction: "ltr" }}>
+                <PhoneInput
+                  value={phone}
+                  onChange={setPhone}
+                  defaultCountry="BH"
+                  international
+                  withCountryCallingCode
+                  placeholder="Phone"
+                  numberInputProps={{
+                    required: true,
+                    name: "phone",
+                    autoComplete: "tel",
+                  }}
+                />
+              </div>
+            )}
 
             {err && <div className="lerr">{err}</div>}
 
