@@ -87,3 +87,8 @@
   .lcard{ padding:20px; }
   .lcard__title{ font-size:clamp(20px,5vw,28px); }
 }
+/* Force LTR/left alignment even inside RTL containers */
+.linput--ltr {
+  direction: ltr;
+  text-align: left;
+}
