@@ -1,4 +1,89 @@
-.auth-wrap{ display:grid; place-items:center; min-height:100vh; padding:16px; }
-.auth-card{ width:100%; max-width:420px; padding:18px; }
-.auth-title{ text-align:center; font-weight:800; font-size:24px; margin-bottom:10px; }
-.auth-actions{ display:flex; gap:8px; margin-top:8px; }
+/* Page */
+.lpage { min-height:100vh; background:#eaf2ff; color:#0f172a; }
+.container { max-width:1440px; margin:0 auto; padding:0 20px; }
+
+/* Top bar — identical gradient/scale */
+.lbar{
+  background: linear-gradient(90deg,#9ec5ff 0%, #8fd3ff 100%);
+  color:#fff; padding:10px 16px;
+  display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
+}
+.lbar__left{ justify-self:start; display:flex; gap:10px; align-items:center; }
+.lbar__center{ justify-self:center; font-weight:900; font-size:clamp(18px,2.2vw,28px); }
+.lbar__right{ justify-self:end; display:flex; gap:10px; align-items:center; }
+
+/* Optional icon button (same style used elsewhere) */
+.iconbtn{
+  background:#ffffff22; color:#fff; border:1px solid #ffffff55;
+  border-radius:999px; padding:8px 12px; font-weight:800; cursor:pointer;
+}
+.iconbtn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
+
+/* Stage — centers the auth card */
+.lstage{
+  min-height:calc(100vh - 160px);
+  display:flex; align-items:center; justify-content:center;
+  margin-top:14px;
+}
+
+/* Auth card — same border (3px #1d4ed8), radius (28px), shadow */
+.lcard{
+  width:min(520px,92%);
+  background:#fff; border-radius:28px; border:3px solid #1d4ed8;
+  box-shadow:0 12px 36px rgba(0,0,0,.08);
+  padding:clamp(22px,2.4vw,36px);
+}
+.lcard__title{
+  text-align:center; font-weight:900; line-height:1.2;
+  font-size:clamp(22px,2.6vw,32px);
+  margin:0 0 14px;
+}
+.lcard__form{ display:grid; gap:12px; }
+
+/* Inputs — bold, clear, blue focus */
+.linput{
+  height:48px; border-radius:14px; border:2px solid #dbeafe;
+  background:#ffffff; color:#0f172a; font-weight:800;
+  padding:0 14px; font-size:16px;
+}
+.linput::placeholder{ color:#6b7280; font-weight:600; }
+.linput:focus{
+  outline:none; border-color:#1d4ed8;
+  box-shadow:0 0 0 4px rgba(29,78,216,.18);
+}
+
+/* Error chip */
+.lerr{
+  background:#fee2e2; color:#991b1b; border:2px solid #fecaca;
+  border-radius:12px; padding:10px 12px; font-weight:800;
+}
+
+/* Actions — pill buttons identical to game pages */
+.lactions{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center; margin-top:6px; }
+
+.lbtn{
+  height:44px; padding:0 18px; border-radius:999px; border:0; cursor:pointer;
+  color:#fff; font-weight:900; box-shadow:0 6px 14px rgba(0,0,0,.12);
+}
+.lbtn:hover{ filter:brightness(0.96); }
+.lbtn:active{ transform:translateY(1px); }
+.lbtn:focus-visible{ outline:2px solid #1d4ed8; outline-offset:2px; }
+
+.lbtn--primary{ background:#1d4ed8; } /* Submit */
+.lbtn--alt{ background:#60a5fa; }     /* Switch mode */
+
+/* Accessibility (consistent across app) */
+:focus-visible{
+  outline:none !important;
+  box-shadow:0 0 0 4px rgba(29,78,216,.28) !important;
+  border-radius:12px;
+}
+
+/* RTL niceties (optional) */
+[dir="rtl"] .lbar__center{ letter-spacing:.1px; }
+
+/* Small screens */
+@media (max-width:600px){
+  .lcard{ padding:20px; }
+  .lcard__title{ font-size:clamp(20px,5vw,28px); }
+}
