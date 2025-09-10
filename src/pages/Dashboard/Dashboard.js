@@ -122,7 +122,7 @@ const styles = {
   heroInner: { maxWidth: 1000, margin: "0 auto", textAlign: "center" },
   heroTitle: { fontSize: 60, fontWeight: 900, marginBottom: 12 },
   // use a real weight (70 -> 600)
-  heroSub: { fontSize: 31, fontWeight: 600 },
+  heroSub: { fontSize: 31, fontWeight: 60 },
   ctas: { marginTop: 28, display: "flex", gap: 18, justifyContent: "center", flexWrap: "wrap" },
 
   btnPrimary: {

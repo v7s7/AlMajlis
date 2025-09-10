@@ -180,7 +180,7 @@ export default function NewGame() {
       />
 
       <div className="section mt-16">
-        <div className="section__title"><span>تفكير</span></div>
+        {/* <div className="section__title"><span>تفكير</span></div> */}
 
         <div className="category-grid">
           {cats.map(c => (
@@ -189,7 +189,6 @@ export default function NewGame() {
               onClick={()=>toggle(c.id)}
               className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
             >
-              <span className="badge badge--info">i</span>
               {/* optional remaining: <span className="badge badge--right badge--sparkle">باقي 61 لعبة</span> */}
               {c.imageUrl && <img alt="" src={c.imageUrl} className="category-card__image" />}
               <div className="category-card__footer">{c.name}</div>
