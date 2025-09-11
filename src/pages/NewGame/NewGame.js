@@ -68,6 +68,23 @@ export default function NewGame() {
     return allCats.filter((c) => c.name?.toLowerCase().includes(queryText));
   }, [allCats, queryText]);
 
+  // ---------- Group by type (for clear containers) ----------
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const c of cats) {
+      const t = (c.type && String(c.type).trim()) || "Other";
+      if (!map.has(t)) map.set(t, []);
+      map.get(t).push(c);
+    }
+    // Sort groups alphabetically by type, but keep "Other" last
+    const entries = Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === "Other") return 1;
+      if (b[0] === "Other") return -1;
+      return a[0].localeCompare(b[0], undefined, { sensitivity: "base" });
+    });
+    return entries; // [ [type, cats[]], ... ]
+  }, [cats]);
+
   function toggle(id) {
     setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 6 ? [...s, id] : s));
   }
@@ -224,6 +241,11 @@ export default function NewGame() {
 
   return (
     <div className="newgame">
+      {/* Back button */}
+      <button className="btn btn--secondary" onClick={() => nav(-1)} style={{ marginBottom: 12 }}>
+        ← Back
+      </button>
+
       <div className="newgame__layout">
         {/* Left column */}
         <div>
@@ -256,38 +278,41 @@ export default function NewGame() {
             </div>
           )}
 
-          <div className="section mt-16">
-            {cats.length === 0 && !catsLoading ? (
-              <div className="mt-12" style={{ color: "#6b7280" }}>
-                لا توجد فئات مطابقة لبحثك.
+          {/* Grouped sections by type */}
+          {grouped.length === 0 && !catsLoading ? (
+            <div className="mt-12" style={{ color: "#6b7280" }}>
+              لا توجد فئات مطابقة لبحثك.
+            </div>
+          ) : (
+            grouped.map(([typeName, list]) => (
+              <div key={typeName} className="section mt-16">
+                <div className="section__title">
+                  <span>{typeName}</span>
+                </div>
+                <div className="category-grid">
+                  {list.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => toggle(c.id)}
+                      className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
+                      title={c.name}
+                      disabled={busy}
+                    >
+                      {c.imageUrl ? (
+                        <img
+                          alt=""
+                          src={c.imageUrl}
+                          className="category-card__image"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      ) : null}
+                      <div className="category-card__footer">{c.name}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="category-grid">
-                {cats.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => toggle(c.id)}
-                    className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
-                    title={c.name}
-                    disabled={busy}
-                  >
-                    {c.imageUrl ? (
-                      <img
-                        alt=""
-                        src={c.imageUrl}
-                        className="category-card__image"
-                        onError={(e) => {
-                          const el = e.currentTarget;
-                          el.style.display = "none";
-                        }}
-                      />
-                    ) : null}
-                    <div className="category-card__footer">{c.name}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            ))
+          )}
         </div>
 
         {/* Right column */}

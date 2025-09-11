@@ -32,6 +32,19 @@ export default function Categories() {
   const [editImageUrl, setEditImageUrl] = useState("");
   const [editFile, setEditFile] = useState(null);
 
+  // NEW: type state (add & edit)
+  const TYPE_OPTIONS = [
+    "عام",
+    "إسلاميات",
+    "مسلسلات",
+    "البحرين",
+        "سيارات",
+
+    
+  ];
+  const [ctype, setCtype] = useState("");        // for add form
+  const [editType, setEditType] = useState("");  // for edit form
+
   useEffect(() => {
     refresh();
   }, []);
@@ -62,6 +75,7 @@ export default function Categories() {
         name: name.trim(),
         imageUrl: finalUrl,
         imagePublicId: publicId,
+        type: ctype || "",                 // NEW: save selected type
         isActive: true,
         createdAt: serverTimestamp()
       });
@@ -69,6 +83,7 @@ export default function Categories() {
       setName("");
       setImageUrl("");
       setFile(null);
+      setCtype("");                        // reset type
       await refresh();
     } catch (e) {
       console.error(e);
@@ -112,6 +127,7 @@ export default function Categories() {
         name: editName.trim(),
         imageUrl: finalUrl,
         imagePublicId: publicId,
+        type: editType || "",              // NEW: save edited type
         updatedAt: serverTimestamp()
       });
 
@@ -119,6 +135,7 @@ export default function Categories() {
       setEditName("");
       setEditImageUrl("");
       setEditFile(null);
+      setEditType("");                    // reset
       await refresh();
     } catch (e) {
       console.error(e);
@@ -145,7 +162,7 @@ export default function Categories() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "2fr 2fr 1fr 1fr",
+          gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr", // NEW: extra column for Type
           gap: 8,
           alignItems: "center",
           marginTop: 8
@@ -168,6 +185,18 @@ export default function Categories() {
           onChange={e => setFile(e.target.files?.[0] || null)}
           disabled={busy}
         />
+        {/* NEW: Type dropdown */}
+        <select
+          value={ctype}
+          onChange={e => setCtype(e.target.value)}
+          disabled={busy}
+        >
+          <option value="">Type…</option>
+          {TYPE_OPTIONS.map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+
         <button onClick={add} disabled={busy}>
           Add
         </button>
@@ -208,6 +237,18 @@ export default function Categories() {
                   onChange={e => setEditFile(e.target.files?.[0] || null)}
                   style={{ marginBottom: 6 }}
                 />
+                {/* NEW: Type dropdown (edit) */}
+                <select
+                  value={editType}
+                  onChange={e => setEditType(e.target.value)}
+                  style={{ marginBottom: 6, width: "100%" }}
+                >
+                  <option value="">Type…</option>
+                  {TYPE_OPTIONS.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => saveEdit(r.id)} disabled={busy}>
                     Save
@@ -218,6 +259,7 @@ export default function Categories() {
                       setEditName("");
                       setEditImageUrl("");
                       setEditFile(null);
+                      setEditType("");
                     }}
                   >
                     Cancel
@@ -236,12 +278,17 @@ export default function Categories() {
                   />
                 )}
                 <div style={{ marginTop: 8, fontWeight: 600 }}>{r.name}</div>
+                {/* NEW: show type */}
+                <div style={{ marginTop: 4, color: "#555" }}>
+                  Type: {r.type || "—"}
+                </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button
                     onClick={() => {
                       setEditingId(r.id);
                       setEditName(r.name);
                       setEditImageUrl(r.imageUrl || "");
+                      setEditType(r.type || "");
                     }}
                     disabled={busy}
                   >
