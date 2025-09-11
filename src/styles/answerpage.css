@@ -114,3 +114,11 @@
   .astage{ margin-top:14px; }
   .backpill{ bottom:12px; inset-inline-end:12px; }
 }
+.aimage{
+  width: min(880px, 90%);
+  max-height: min(58vh, 540px);
+  object-fit: contain;
+  border-radius: 6px;
+  margin-top: 8px;
+  display: block;
+}

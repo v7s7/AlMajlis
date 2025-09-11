@@ -29,8 +29,7 @@ export default function AnswerPage() {
       const t = { id: ts.id, ...ts.data() };
 
       const qs = await getDoc(doc(db, "questions", t.questionId));
-      const qd = qs.exists() ? qs.data() : { text: "", answer: "", imageUrl: "" };
-
+const qd = qs.exists() ? qs.data() : { text: "", answer: "", imageUrl: "", answerImageUrl: "" };
       const catsSnap = await getDocs(collection(gref, "game_categories"));
       const cats = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const catForTile = cats.find(c => c.position === t.categoryPosition);
@@ -99,7 +98,15 @@ export default function AnswerPage() {
       {/* Answer stage */}
       <div className="astage container">
         <div className="answer">الإجابة: <strong>{question.answer}</strong></div>
-
+{question.answerImageUrl && (
+  <img
+    src={question.answerImageUrl}
+    alt=""
+    className="aimage"
+    loading="lazy"
+    decoding="async"
+  />
+)}
         <div className="assignrow">
   <button className="btn btn--lg btn--a" disabled={busy} onClick={() => assign("A")}>
     {game.teamAName}
