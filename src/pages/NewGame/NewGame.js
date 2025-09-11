@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
@@ -13,11 +12,12 @@ import {
   setDoc,
   where,
   getCountFromServer,
+  writeBatch,
 } from "firebase/firestore";
 import "../../styles/newgame.css";
 
 export default function NewGame() {
-  const [cats, setCats] = useState([]);
+  const [allCats, setAllCats] = useState([]);
   const [catsLoading, setCatsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sel, setSel] = useState([]); // categoryIds
@@ -32,26 +32,41 @@ export default function NewGame() {
   const searchTimer = useRef(null);
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => setQueryText(search.trim().toLowerCase()), 250);
+    searchTimer.current = setTimeout(
+      () => setQueryText(search.trim().toLowerCase()),
+      250
+    );
     return () => searchTimer.current && clearTimeout(searchTimer.current);
   }, [search]);
 
-  // ---------- Load + filter categories ----------
+  // ---------- Load categories (once) ----------
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setCatsLoading(true);
-      const snap = await getDocs(query(collection(db, "categories"), orderBy("name")));
-      if (cancelled) return;
-      let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (queryText) rows = rows.filter((c) => c.name?.toLowerCase().includes(queryText));
-      setCats(rows);
-      setCatsLoading(false);
+      try {
+        setCatsLoading(true);
+        const snap = await getDocs(
+          query(collection(db, "categories"), orderBy("name"))
+        );
+        if (cancelled) return;
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setAllCats(rows);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setCatsLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [queryText]);
+  }, []);
+
+  // ---------- Filtered list ----------
+  const cats = useMemo(() => {
+    if (!queryText) return allCats;
+    return allCats.filter((c) => c.name?.toLowerCase().includes(queryText));
+  }, [allCats, queryText]);
 
   function toggle(id) {
     setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 6 ? [...s, id] : s));
@@ -82,6 +97,7 @@ export default function NewGame() {
   function sampleK(arr, k) {
     const a = [...arr];
     if (a.length < k) throw new Error(`Not enough items to sample ${k}`);
+    // Fisher–Yates
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
@@ -100,7 +116,7 @@ export default function NewGame() {
         );
         const count = (await getCountFromServer(qy)).data().count || 0;
         if (count < 2) {
-          const name = cats.find((c) => c.id === id)?.name || id;
+          const name = allCats.find((c) => c.id === id)?.name || id;
           return { ok: false, message: `Category "${name}" needs at least 2 questions for ${v}.` };
         }
       }
@@ -123,9 +139,10 @@ export default function NewGame() {
     if (!user?.uid) return alert("You must be signed in.");
     if (sel.length < 1) return alert("Pick at least 1 category (up to 6).");
     if (busy) return;
-    setBusy(true);
 
+    setBusy(true);
     try {
+      // 1) Stock check (cheap counts)
       const check = await validateStock(sel);
       if (!check.ok) {
         alert(check.message);
@@ -133,24 +150,8 @@ export default function NewGame() {
         return;
       }
 
-      const gameRef = await addDoc(collection(db, "games"), {
-        hostUserId: user.uid,
-        status: "pending",
-        teamAName: teamA.trim(),
-        teamBName: teamB.trim(),
-        teamAScore: 0,
-        teamBScore: 0,
-        turn: "A",
-        startedAt: serverTimestamp(),
-        endedAt: null,
-      });
-
-      const gcCol = collection(gameRef, "game_categories");
-      for (let i = 0; i < sel.length; i++) {
-        await addDoc(gcCol, { position: i + 1, categoryId: sel[i] });
-      }
-
-      const tilesCol = collection(gameRef, "game_tiles");
+      // 2) Pre-pick all questions (real fetches) BEFORE any writes
+      const perCategoryPicks = [];
       for (let catPos = 0; catPos < sel.length; catPos++) {
         const categoryId = sel[catPos];
         const buckets = new Map();
@@ -163,12 +164,38 @@ export default function NewGame() {
           }
           buckets.set(v, sampleK(all, 2));
         }
+        perCategoryPicks.push({ categoryId, buckets });
+      }
 
+      // 3) Single atomic batch (game, categories, tiles)
+      const batch = writeBatch(db);
+      const gameRef = doc(collection(db, "games"));
+      batch.set(gameRef, {
+        hostUserId: user.uid,
+        status: "active", // we commit everything at once, so activate directly
+        teamAName: teamA.trim(),
+        teamBName: teamB.trim(),
+        teamAScore: 0,
+        teamBScore: 0,
+        turn: "A",
+        startedAt: serverTimestamp(),
+        endedAt: null,
+      });
+
+      // game_categories
+      const gcCol = collection(gameRef, "game_categories");
+      sel.forEach((categoryId, i) => {
+        batch.set(doc(gcCol), { position: i + 1, categoryId });
+      });
+
+      // game_tiles
+      const tilesCol = collection(gameRef, "game_tiles");
+      for (let catPos = 0; catPos < perCategoryPicks.length; catPos++) {
+        const { buckets } = perCategoryPicks[catPos];
         for (let row = 0; row < SEQUENCE.length; row++) {
           const { value, index } = SEQUENCE[row];
           const qpick = buckets.get(value)[index];
-
-          await addDoc(tilesCol, {
+          batch.set(doc(tilesCol), {
             categoryPosition: catPos + 1,
             rowIndex: row + 1,
             value,
@@ -180,7 +207,7 @@ export default function NewGame() {
         }
       }
 
-      await setDoc(doc(db, "games", gameRef.id), { status: "active" }, { merge: true });
+      await batch.commit();
       nav(`/game/${gameRef.id}`);
     } catch (e) {
       console.error(e);
@@ -191,10 +218,9 @@ export default function NewGame() {
   }
 
   const selectedNames = useMemo(
-    () => sel.map((id) => cats.find((c) => c.id === id)?.name || id),
-    [sel, cats]
+    () => sel.map((id) => allCats.find((c) => c.id === id)?.name || id),
+    [sel, allCats]
   );
-  const progressPct = (sel.length / 6) * 100;
 
   return (
     <div className="newgame">
@@ -206,13 +232,13 @@ export default function NewGame() {
             placeholder="Search categories…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search categories"
           />
 
           <div className="mt-12" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ minWidth: 120, fontWeight: 700 }}>
               Selected: {sel.length} / 6
             </div>
-            
           </div>
 
           {sel.length > 0 && (
@@ -243,13 +269,17 @@ export default function NewGame() {
                     onClick={() => toggle(c.id)}
                     className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
                     title={c.name}
+                    disabled={busy}
                   >
                     {c.imageUrl ? (
                       <img
                         alt=""
                         src={c.imageUrl}
                         className="category-card__image"
-                        onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          el.style.display = "none";
+                        }}
                       />
                     ) : null}
                     <div className="category-card__footer">{c.name}</div>
@@ -264,35 +294,36 @@ export default function NewGame() {
         <div>
           <div className="panel">
             <h3 dir="ltr">Teams</h3>
-            <input
-  className="auth-input mt-8"
-  value={teamA}
-  onChange={(e) => setTeamA(e.target.value)}
-  placeholder="Team A"
-  dir="ltr"
-/>
 
-<input
-  className="auth-input mt-8"
-  value={teamB}
-  onChange={(e) => setTeamB(e.target.value)}
-  placeholder="Team B"
-  dir="ltr"
-/>
+            <input
+              className="auth-input mt-8"
+              value={teamA}
+              onChange={(e) => setTeamA(e.target.value)}
+              placeholder="Team A"
+              dir="ltr"
+              disabled={busy}
+            />
+
+            <input
+              className="auth-input mt-8"
+              value={teamB}
+              onChange={(e) => setTeamB(e.target.value)}
+              placeholder="Team B"
+              dir="ltr"
+              disabled={busy}
+            />
 
             <button className="btn mt-12" onClick={start} disabled={!canStart}>
               {busy ? "Starting… Wait 10 Sec Please" : "Start Game"}
             </button>
+
             {!user?.uid && (
               <div className="mt-8" style={{ color: "#ef4444", fontWeight: 700 }}>
                 Sign in to start a game.
               </div>
             )}
-            
           </div>
-          
         </div>
-        
       </div>
     </div>
   );

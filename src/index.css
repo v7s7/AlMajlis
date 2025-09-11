@@ -1,4 +1,35 @@
 ﻿/* ===== Reset & base ===== */
+/* 0) Load Tajawal once (optional if you already include it in index.html) */
+@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap");
+
+/* 1) Single source of truth */
+:root {
+  --font-ui: "Tajawal", system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans Arabic", sans-serif;
+}
+
+/* 2) Apply globally (replace your current body font-family if you want) */
+html, body {
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis-weight: none; /* avoid fake bolds */
+  font-variant-numeric: tabular-nums;
+}
+
+/* 3) Force all form controls & common UI to inherit (browsers default otherwise) */
+button, input, select, textarea, label,
+.chip, .btn, .iconbtn, .backpill,
+.category-card__footer, .turn-badge, .team-name, .score {
+  font: inherit;       /* family + size + weight */
+  color: inherit;
+}
+
+/* 4) Headings inherit too (keeps your sizes but same family) */
+h1, h2, h3, h4, h5, h6 { font-family: inherit; }
+
+/* 5) If any component sets its own font explicitly, neutralize it */
+[class*="__title"], [class*="__label"] { font-family: inherit; }
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body {
