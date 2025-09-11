@@ -1,11 +1,22 @@
 // src/pages/Admin/Questions.jsx
-import { useEffect, useState, useRef } from "react";import { db } from "../../firebase";
+import { useEffect, useState } from "react";
+import { db } from "../../firebase";
 import {
-  collection, addDoc, getDocs, deleteDoc, doc, orderBy, query, where, serverTimestamp
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  orderBy,
+  query,
+  where,
+  serverTimestamp,
+  updateDoc
 } from "firebase/firestore";
 import { uploadImage } from "../../lib/upload";
 import CldImage from "../../components/CldImage";
 import "../../styles/questions.css";
+
 export default function Questions() {
   const role = window.__ALMAJLIS__?.role || "user";
   const [cats, setCats] = useState([]);
@@ -14,14 +25,18 @@ export default function Questions() {
   const [text, setText] = useState("");
   const [answer, setAnswer] = useState("");
 
-  // NEW: separate image inputs for question & answer
-  const [qImageUrl, setQImageUrl] = useState("");  // optional manual URL (question)
-  const [qFile, setQFile] = useState(null);        // optional local file (question)
-  const [aImageUrl, setAImageUrl] = useState("");  // optional manual URL (answer)
-  const [aFile, setAFile] = useState(null);        // optional local file (answer)
+  // add form image states
+  const [qImageUrl, setQImageUrl] = useState("");
+  const [qFile, setQFile] = useState(null);
+  const [aImageUrl, setAImageUrl] = useState("");
+  const [aFile, setAFile] = useState(null);
 
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
+
+  // edit states
+  const [editingId, setEditingId] = useState(null);
+  const [editValues, setEditValues] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -34,18 +49,18 @@ export default function Questions() {
 
   async function refresh() {
     const col = collection(db, "questions");
-    const q = categoryId ? query(col, where("categoryId","==",categoryId)) : query(col);
+    const q = categoryId ? query(col, where("categoryId", "==", categoryId)) : query(col);
     const snap = await getDocs(q);
     setRows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
   }
 
   async function add() {
     if (role !== "admin") return alert("Not authorized.");
-    if (!categoryId || !text.trim() || !answer.trim()) return alert("Fill category, question text, and answer.");
+    if (!categoryId || !text.trim() || !answer.trim())
+      return alert("Fill category, question text, and answer.");
 
     setBusy(true);
     try {
-      // Upload (or take manual URL) for the QUESTION image
       let qFinalUrl = qImageUrl.trim();
       let qPublicId = "";
       if (qFile) {
@@ -54,7 +69,6 @@ export default function Questions() {
         qPublicId = up.publicId;
       }
 
-      // Upload (or take manual URL) for the ANSWER image
       let aFinalUrl = aImageUrl.trim();
       let aPublicId = "";
       if (aFile) {
@@ -63,31 +77,27 @@ export default function Questions() {
         aPublicId = up.publicId;
       }
 
-      // Back-compat: keep legacy imageUrl/imagePublicId aligned to the QUESTION image
       await addDoc(collection(db, "questions"), {
         categoryId,
         value: Number(value),
         text: text.trim(),
         answer: answer.trim(),
-
-        // Legacy single-image fields (question-side for older pages):
-        imageUrl: qFinalUrl || "",               // legacy
-        imagePublicId: qPublicId || "",          // legacy
-
-        // New explicit fields:
+        imageUrl: qFinalUrl || "",
+        imagePublicId: qPublicId || "",
         questionImageUrl: qFinalUrl || "",
         questionImagePublicId: qPublicId || "",
         answerImageUrl: aFinalUrl || "",
         answerImagePublicId: aPublicId || "",
-
         isActive: true,
         createdAt: serverTimestamp()
       });
 
-      // Reset form
-      setText(""); setAnswer("");
-      setQImageUrl(""); setQFile(null);
-      setAImageUrl(""); setAFile(null);
+      setText("");
+      setAnswer("");
+      setQImageUrl("");
+      setQFile(null);
+      setAImageUrl("");
+      setAFile(null);
 
       await refresh();
     } catch (e) {
@@ -113,106 +123,244 @@ export default function Questions() {
     }
   }
 
-  if (role !== "admin") return <div style={{padding:16}}>Not authorized.</div>;
+  async function saveEdit(id) {
+    if (role !== "admin") return alert("Not authorized.");
+    setBusy(true);
+    try {
+      let qFinalUrl = editValues.questionImageUrl?.trim() || "";
+      let qPublicId = editValues.questionImagePublicId || "";
+      if (editValues.qFile) {
+        const up = await uploadImage(editValues.qFile);
+        qFinalUrl = up.url;
+        qPublicId = up.publicId;
+      }
+
+      let aFinalUrl = editValues.answerImageUrl?.trim() || "";
+      let aPublicId = editValues.answerImagePublicId || "";
+      if (editValues.aFile) {
+        const up = await uploadImage(editValues.aFile);
+        aFinalUrl = up.url;
+        aPublicId = up.publicId;
+      }
+
+      await updateDoc(doc(db, "questions", id), {
+        categoryId: editValues.categoryId,
+        value: Number(editValues.value),
+        text: editValues.text.trim(),
+        answer: editValues.answer.trim(),
+        imageUrl: qFinalUrl,
+        imagePublicId: qPublicId,
+        questionImageUrl: qFinalUrl,
+        questionImagePublicId: qPublicId,
+        answerImageUrl: aFinalUrl,
+        answerImagePublicId: aPublicId,
+        updatedAt: serverTimestamp()
+      });
+
+      setEditingId(null);
+      setEditValues({});
+      await refresh();
+    } catch (e) {
+      console.error(e);
+      alert("Update failed: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (role !== "admin") return <div style={{ padding: 16 }}>Not authorized.</div>;
 
   return (
-<div className="qs" style={{maxWidth:1100, margin:"20px auto", padding:16}}>      <h2>Questions</h2>
-      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, alignItems:"start"}}>
+    <div className="qs" style={{ maxWidth: 1100, margin: "20px auto", padding: 16 }}>
+      <h2>Questions</h2>
+      <button className="btn" onClick={() => nav(-1)}>
+          ↩︎ رجوع
+        </button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+        {/* Add form */}
         <div>
-          <select value={categoryId} onChange={e=>setCategoryId(e.target.value)} style={{width:"100%", marginBottom:8}}>
-            {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <select
+            value={categoryId}
+            onChange={e => setCategoryId(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
+          >
+            {cats.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
 
-          <select value={value} onChange={e=>setValue(e.target.value)} style={{width:"100%", marginBottom:8}}>
+          <select
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
+          >
             <option value="200">200</option>
             <option value="400">400</option>
             <option value="600">600</option>
           </select>
 
           <input
-            placeholder="Question text (AR or EN)"
+            placeholder="Question text"
             value={text}
-            onChange={e=>setText(e.target.value)}
-            style={{width:"100%", marginBottom:8}}
+            onChange={e => setText(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
           />
           <input
             placeholder="Correct answer"
             value={answer}
-            onChange={e=>setAnswer(e.target.value)}
-            style={{width:"100%", marginBottom:8}}
+            onChange={e => setAnswer(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
           />
 
-          {/* QUESTION image (optional) */}
           <input
             placeholder="Question Image URL (optional)"
             value={qImageUrl}
-            onChange={e=>setQImageUrl(e.target.value)}
-            style={{width:"100%", marginBottom:8}}
+            onChange={e => setQImageUrl(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
           />
-          <input
-            type="file"
-            onChange={e=>setQFile(e.target.files?.[0] || null)}
-            style={{marginBottom:8}}
-          />
+          <input type="file" onChange={e => setQFile(e.target.files?.[0] || null)} style={{ marginBottom: 8 }} />
 
-          {/* ANSWER image (optional) */}
           <input
             placeholder="Answer Image URL (optional)"
             value={aImageUrl}
-            onChange={e=>setAImageUrl(e.target.value)}
-            style={{width:"100%", marginBottom:8}}
+            onChange={e => setAImageUrl(e.target.value)}
+            style={{ width: "100%", marginBottom: 8 }}
           />
-          <input
-            type="file"
-            onChange={e=>setAFile(e.target.files?.[0] || null)}
-          />
+          <input type="file" onChange={e => setAFile(e.target.files?.[0] || null)} />
 
-          <div style={{display:"flex", gap:8, marginTop:8}}>
-            <button onClick={add} disabled={busy}>Add Question</button>
-            <button onClick={refresh} disabled={busy}>Refresh</button>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={add} disabled={busy}>
+              Add Question
+            </button>
+            <button onClick={refresh} disabled={busy}>
+              Refresh
+            </button>
           </div>
         </div>
 
+        {/* Questions list */}
         <div>
-          <div style={{display:"grid", gap:10}}>
+          <div style={{ display: "grid", gap: 10 }}>
             {rows
               .filter(r => !categoryId || r.categoryId === categoryId)
-              .sort((a,b)=>a.value-b.value)
-              .map(r => (
-<div key={r.id} className="qcard" style={{border:"1px solid #ddd", borderRadius:12, padding:10}}>                <div><strong>{r.value}</strong> — {r.text}</div>
-
-                {/* QUESTION image (supports legacy or new fields) */}
-                {(r.imagePublicId || r.imageUrl || r.questionImagePublicId || r.questionImageUrl) && (
-                  <div style={{marginTop:6}}>
-                    <div style={{fontSize:12, fontWeight:700, color:"#64748b", marginBottom:4}}>صورة السؤال</div>
-                    <CldImage
-                      publicId={r.questionImagePublicId || r.imagePublicId}
-                      url={r.questionImageUrl || r.imageUrl}
-                      w={800}
-                      h={300}
-                      alt="question"
+              .sort((a, b) => a.value - b.value)
+              .map(r =>
+                editingId === r.id ? (
+                  <div key={r.id} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 10 }}>
+                    <select
+                      value={editValues.categoryId}
+                      onChange={e => setEditValues({ ...editValues, categoryId: e.target.value })}
+                      style={{ width: "100%", marginBottom: 6 }}
+                    >
+                      {cats.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={editValues.value}
+                      onChange={e => setEditValues({ ...editValues, value: e.target.value })}
+                      style={{ width: "100%", marginBottom: 6 }}
+                    >
+                      <option value="200">200</option>
+                      <option value="400">400</option>
+                      <option value="600">600</option>
+                    </select>
+                    <input
+                      value={editValues.text}
+                      onChange={e => setEditValues({ ...editValues, text: e.target.value })}
+                      style={{ width: "100%", marginBottom: 6 }}
                     />
-                  </div>
-                )}
-
-                {/* ANSWER image (new fields) */}
-                {(r.answerImagePublicId || r.answerImageUrl) && (
-                  <div style={{marginTop:6}}>
-                    <div style={{fontSize:12, fontWeight:700, color:"#64748b", marginBottom:4}}>صورة الإجابة</div>
-                    <CldImage
-                      publicId={r.answerImagePublicId}
-                      url={r.answerImageUrl}
-                      w={800}
-                      h={300}
-                      alt="answer"
+                    <input
+                      value={editValues.answer}
+                      onChange={e => setEditValues({ ...editValues, answer: e.target.value })}
+                      style={{ width: "100%", marginBottom: 6 }}
                     />
-                  </div>
-                )}
+                    <input
+                      value={editValues.questionImageUrl}
+                      onChange={e => setEditValues({ ...editValues, questionImageUrl: e.target.value })}
+                      placeholder="Question Image URL"
+                      style={{ width: "100%", marginBottom: 6 }}
+                    />
+                    <input type="file" onChange={e => setEditValues({ ...editValues, qFile: e.target.files?.[0] })} />
+                    <input
+                      value={editValues.answerImageUrl}
+                      onChange={e => setEditValues({ ...editValues, answerImageUrl: e.target.value })}
+                      placeholder="Answer Image URL"
+                      style={{ width: "100%", margin: "6px 0" }}
+                    />
+                    <input type="file" onChange={e => setEditValues({ ...editValues, aFile: e.target.files?.[0] })} />
 
-                <div style={{marginTop:6}}>Ans: {r.answer}</div>
-                <button onClick={()=>del(r.id)} style={{marginTop:6}} disabled={busy}>Delete</button>
-              </div>
-            ))}
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button onClick={() => saveEdit(r.id)} disabled={busy}>
+                        Save
+                      </button>
+                      <button onClick={() => setEditingId(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={r.id} className="qcard" style={{ border: "1px solid #ddd", borderRadius: 12, padding: 10 }}>
+                    <div>
+                      <strong>{r.value}</strong> — {r.text}
+                    </div>
+                    {(r.imagePublicId || r.imageUrl || r.questionImagePublicId || r.questionImageUrl) && (
+                      <div style={{ marginTop: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
+                          صورة السؤال
+                        </div>
+                        <CldImage
+                          publicId={r.questionImagePublicId || r.imagePublicId}
+                          url={r.questionImageUrl || r.imageUrl}
+                          w={800}
+                          h={300}
+                          alt="question"
+                        />
+                      </div>
+                    )}
+                    {(r.answerImagePublicId || r.answerImageUrl) && (
+                      <div style={{ marginTop: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
+                          صورة الإجابة
+                        </div>
+                        <CldImage
+                          publicId={r.answerImagePublicId}
+                          url={r.answerImageUrl}
+                          w={800}
+                          h={300}
+                          alt="answer"
+                        />
+                      </div>
+                    )}
+                    <div style={{ marginTop: 6 }}>Ans: {r.answer}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                      <button
+                        onClick={() => {
+                          setEditingId(r.id);
+                          setEditValues({
+                            categoryId: r.categoryId,
+                            value: r.value,
+                            text: r.text,
+                            answer: r.answer,
+                            questionImageUrl: r.questionImageUrl || r.imageUrl || "",
+                            questionImagePublicId: r.questionImagePublicId || r.imagePublicId || "",
+                            answerImageUrl: r.answerImageUrl || "",
+                            answerImagePublicId: r.answerImagePublicId || ""
+                          });
+                        }}
+                        disabled={busy}
+                      >
+                        Edit
+                      </button>
+                      <button onClick={() => del(r.id)} disabled={busy}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
           </div>
         </div>
       </div>
