@@ -281,15 +281,18 @@ export default function NewGame() {
 />
 
             <button className="btn mt-12" onClick={start} disabled={!canStart}>
-              {busy ? "Starting…" : "Start Game"}
+              {busy ? "Starting… Wait 10 Sec Please" : "Start Game"}
             </button>
             {!user?.uid && (
               <div className="mt-8" style={{ color: "#ef4444", fontWeight: 700 }}>
                 Sign in to start a game.
               </div>
             )}
+            
           </div>
+          
         </div>
+        
       </div>
     </div>
   );

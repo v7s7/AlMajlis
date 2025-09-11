@@ -68,7 +68,7 @@ html,body{
 /* Category card */
 .category-card{
   position:relative; border-radius:var(--radius-lg); background:var(--card);
-  box-shadow:var(--shadow-1); border:1px solid #dbeafe; padding:10px 10px 12px;
+  box-shadow:var(--shadow-1); border:3px solid #dbeafe; padding:10px 10px 12px;
   cursor:pointer; text-align:start; transition:border-color .15s, box-shadow .15s, transform .03s;
   outline:none; display:grid; grid-template-rows:auto 42px;
 }

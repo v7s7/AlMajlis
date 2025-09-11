@@ -148,7 +148,6 @@ export default function GameRoom() {
       <div className="appbar">
         <div className="appbar__row container">
           <div className="appbar__actions">
-            <button className="btn" onClick={()=>nav(-1)}>رجوع لأخر إجابة</button>
             <button className="btn" onClick={()=>nav(`/game/${id}/results`)}>إنهاء اللعبة</button>
           </div>
           <div className="appbar__title">
