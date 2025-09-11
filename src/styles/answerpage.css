@@ -1,8 +1,12 @@
-/* Page */
+/* ===========================
+   Al Majlis — Answer Page (theme-aligned)
+   =========================== */
+
+/* Page & container */
 .apage { min-height:100vh; background:#eaf2ff; color:#0f172a; }
 .container { max-width:1440px; margin:0 auto; padding:0 20px; }
 
-/* Top bar — same gradient, scale, chips */
+/* Top bar — gradient, scale, chips */
 .abar{
   background: linear-gradient(90deg,#9ec5ff 0%, #8fd3ff 100%);
   color:#fff; padding:10px 16px;
@@ -17,25 +21,26 @@
 }
 .iconbtn:focus-visible{ outline:2px solid #fff; outline-offset:2px; }
 
-/* Points chip — identical to question page */
+/* Points chip */
 .pointchip{
   background:#1d4ed8; color:#fff; border-radius:12px;
   padding:8px 14px; font-weight:900; font-size:14px;
   box-shadow:0 10px 20px rgba(29,78,216,.25);
 }
 
-/* Stage — identical shape/border/shadow and min-height */
+/* Stage — white card with blue border */
 .astage{
   position:relative;
-  background:#fff; border-radius:28px; border:3px solid #1d4ed8;
+  background:#fff; border-radius:28px; border:3px solid #91aeff;
   box-shadow:0 12px 36px rgba(0,0,0,.08);
-  margin-top:14px; padding:clamp(22px,2.4vw,36px);
+  margin-top:180px; padding:clamp(22px,2.4vw,36px);
   min-height:calc(100vh - 160px);
   display:flex; flex-direction:column; align-items:center; gap:18px;
-  justify-content:center; /* center vertically (no image on answer page) */
+  justify-content:center;
+  
 }
 
-/* Answer text — same scale as .qtext */
+/* Answer text */
 .answer{
   font-size:clamp(26px,3.2vw,42px);
   font-weight:900; line-height:1.35; text-align:center;
@@ -43,33 +48,69 @@
   word-break:break-word; overflow-wrap:anywhere;
 }
 
-/* Action buttons row — placed bottom-right like the question page action dock */
-.assignrow{
-  position:absolute; bottom:16px; inset-inline-end:24px;
-  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-}
-
-/* Buttons — same pills as question page (.pill) */
+/* ===== Buttons (shared) ===== */
 .btn{
   height:44px; padding:0 16px; border-radius:999px; border:0;
-  color:#fff; font-weight:900; cursor:pointer;
+  color:#fff; font-weight:900; cursor:pointer; background:#60a5fa;
   box-shadow:0 6px 14px rgba(0,0,0,.12);
+  transition:filter .15s, transform .03s, box-shadow .15s;
+  font-family: inherit;
 }
 .btn:hover{ filter:brightness(0.96); }
 .btn:active{ transform:translateY(1px); }
 .btn:focus-visible{ outline:2px solid #1d4ed8; outline-offset:2px; }
 
-/* Team colors — exact mapping */
+/* Team color pills */
 .btn--a{ background:#1d4ed8; }   /* Team A (blue) */
-.btn--b{ background:#16a34a; }   /* Team B (green) */
-/* The "no one" button in your JSX has class .btn only; keep it readable: */
-.assignrow .btn:not(.btn--a):not(.btn--b){ background:#60a5fa; color:#fff; }
+.btn--b{ background:#1d4ed8; }   /* Team B (green) */
 
-/* RTL niceties */
-[dir="rtl"] .assignrow{ inset-inline-start:24px; inset-inline-end:auto; }
+/* Big primary CTA */
+.btn--main{
+  min-height: clamp(56px, 6.2vh, 72px);
+  padding: 0 clamp(24px, 4vw, 40px);
+  font-size: clamp(18px, 2vw, 24px);
+  border-radius: 999px;
+  background:#1d4ed8;
+  box-shadow:0 10px 28px rgba(29,78,216,.22);
+}
+.btn--main:hover{ filter:brightness(1.03); }
+.btn--main:active{ transform: translateY(1px); }
 
-/* Small screens parity */
+/* Larger team buttons */
+.btn--lg{
+  min-height: clamp(52px, 6vh, 64px);
+  padding: 0 clamp(20px, 3.2vw, 32px);
+  font-size: clamp(16px, 1.8vw, 20px);
+  border-radius: 999px;
+}
+
+/* Center the team buttons at the bottom */
+.assignrow{
+  position:absolute;
+  bottom:16px;
+  left:50%;
+  transform: translateX(-50%);
+  display:flex; gap:12px; flex-wrap:wrap;
+  align-items:center; justify-content:center;
+  padding:0 8px;
+}
+.assignrow .btn{ background:#60a5fa; color:#fff; }
+.assignrow .btn--a{ background:#1d4ed8; }
+.assignrow .btn--b{ background:#1d4ed8; }
+
+/* Back to question pill pinned to bottom-right */
+.backpill{
+  position:absolute;
+  inset-inline-end:16px;
+  bottom:16px;
+  z-index:1;
+}
+
+/* Small screens */
 @media (max-width:600px){
   .pointchip{ font-size:13px; padding:8px 12px; }
   .answer{ font-size:clamp(22px,5.2vw,36px); }
+  .assignrow{ bottom:12px; gap:10px; }
+  .astage{ margin-top:14px; }
+  .backpill{ bottom:12px; inset-inline-end:12px; }
 }
