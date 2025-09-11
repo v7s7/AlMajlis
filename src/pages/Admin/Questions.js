@@ -1,6 +1,6 @@
 // src/pages/Admin/Questions.jsx
 import { useEffect, useState } from "react";
-import { db } from "../../firebase";
+import { useNavigate } from "react-router-dom";import { db } from "../../firebase";
 import {
   collection,
   addDoc,
@@ -37,7 +37,7 @@ export default function Questions() {
   // edit states
   const [editingId, setEditingId] = useState(null);
   const [editValues, setEditValues] = useState({});
-
+const nav = useNavigate();
   useEffect(() => {
     (async () => {
       const snap = await getDocs(query(collection(db, "categories"), orderBy("name")));
