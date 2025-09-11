@@ -48,8 +48,7 @@ export default function AnswerPage() {
   }, [gameId, tileId, nav]);
 
   async function assign(to) {
-    if (!game || !tile) return;
-    if (busy) return;
+    if (!game || !tile || busy) return;
     setBusy(true);
 
     try {
@@ -94,20 +93,32 @@ export default function AnswerPage() {
           <button className="iconbtn" onClick={() => nav(`/game/${gameId}`)}>↩︎ الرجوع للوحة</button>
         </div>
         <div className="abar__center">{categoryName || " "}</div>
-        <div className="abar__right">
-          <div className="pointchip">{tile.value} نقطة</div>
-        </div>
+        <div className="abar__right"></div>
       </div>
 
-      {/* Full-bleed answer stage */}
+      {/* Answer stage */}
       <div className="astage container">
         <div className="answer">الإجابة: <strong>{question.answer}</strong></div>
 
         <div className="assignrow">
-          <button className="btn btn--a" disabled={busy} onClick={() => assign("A")}> {game.teamAName}</button>
-          <button className="btn btn--b" disabled={busy} onClick={() => assign("B")}> {game.teamBName}</button>
-          <button className="btn" disabled={busy} onClick={() => assign("none")}>لا أحد</button>
-        </div>
+  <button className="btn btn--lg btn--a" disabled={busy} onClick={() => assign("A")}>
+    {game.teamAName}
+  </button>
+  <button className="btn btn--lg btn--b" disabled={busy} onClick={() => assign("B")}>
+    {game.teamBName}
+  </button>
+  <button className="btn btn--lg" disabled={busy} onClick={() => assign("none")}>
+    لا أحد
+  </button>
+</div>
+
+{/* bottom-right back */}
+<button
+  className="btn btn--main backpill"
+  onClick={() => nav(`/game/${gameId}/tile/${tileId}`)}
+>
+  ارجع للسؤال
+</button>
       </div>
     </div>
   );

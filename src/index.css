@@ -66,6 +66,8 @@ body {
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
 }
+/* Ensure all your pills use the same font */
+.btn, .iconbtn, .backpill { font-family: inherit; }
 
 /* Generic button (blue scheme) */
 .btn {
