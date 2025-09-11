@@ -73,3 +73,17 @@
   .cats { padding: 12px; }
   .cats h2 { margin-bottom: 10px; }
 }
+/* Top row: title + back button */
+.cats__top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+/* Keep heading tight with the row */
+.cats h2{
+  margin: 4px 0 6px;
+  font-weight:900;
+  font-size: clamp(20px, 2.4vw, 28px);
+}

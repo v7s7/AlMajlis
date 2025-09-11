@@ -1,12 +1,12 @@
 // src/pages/Admin/Categories.jsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom"; // ⬅️ added
 import { db } from "../../firebase";
 import {
   collection, addDoc, getDocs, deleteDoc, doc, orderBy, query, serverTimestamp
 } from "firebase/firestore";
 import { uploadImage } from "../../lib/upload";
 import CldImage from "../../components/CldImage";
-// ⬇️ use a dedicated stylesheet for this page
 import "../../styles/categories.css";
 
 export default function Categories() {
@@ -17,6 +17,7 @@ export default function Categories() {
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const nav = useNavigate(); // ⬅️ added
 
   useEffect(() => { refresh(); }, []);
   async function refresh() {
@@ -35,7 +36,7 @@ export default function Categories() {
 
       if (file) {
         setMsg("Uploading image…");
-        const up = await uploadImage(file);
+        const up = await uploadImage(file); // Cloudinary
         finalUrl = up.url;
         publicId = up.publicId;
       }
@@ -77,7 +78,11 @@ export default function Categories() {
 
   return (
     <div className="cats" style={{maxWidth:1100, margin:"20px auto", padding:16}}>
-      <h2>Categories</h2>
+      {/* Top row with Back */}
+      <div className="cats__top">
+        <h2>Categories</h2>
+        <button className="btn" onClick={() => nav(-1)}>↩︎ رجوع</button>
+      </div>
 
       <div style={{display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr", gap:8, alignItems:"center", marginTop:8}}>
         <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)} disabled={busy} />
