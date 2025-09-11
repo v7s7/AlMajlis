@@ -1,5 +1,5 @@
 /* ===========================
-   Al Majlis — New Game Page (final, cleaned)
+   Al Majlis — New Game Page (final, cleaned++)
    =========================== */
 
 /* Tokens */
@@ -22,8 +22,12 @@
 html,body{
   background:var(--bg); color:var(--ink);
   font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic","Noto Sans","Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji";
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
 :focus-visible{ outline:none!important; box-shadow:0 0 0 4px var(--ring)!important; }
+@media (prefers-reduced-motion: reduce){
+  *{ transition:none !important; animation:none !important; }
+}
 
 /* Page wrapper */
 .newgame{ max-width:1440px; margin:24px auto 56px; padding:0 16px; }
@@ -36,10 +40,12 @@ html,body{
 
 /* Search */
 .input-search{
-  width:100%; height:46px; border-radius:12px; border:1px solid #c7d2fe;
+  width:100%; height:52px; border-radius:12px; border:1px solid #c7d2fe;
   background:#fff; padding:0 14px; font-size:var(--fs-base); outline:none;
-  transition:border-color .15s, box-shadow .15s;
+  transition:border-color .15s, box-shadow .15s, background .15s;
 }
+.input-search::placeholder{ color:var(--muted); }
+.input-search:hover{ background:#fff; }
 .input-search:focus{ border-color:var(--accent); box-shadow:0 0 0 4px var(--ring); }
 
 /* Section */
@@ -70,26 +76,26 @@ html,body{
   position:relative; border-radius:var(--radius-lg); background:var(--card);
   box-shadow:var(--shadow-1); border:3px solid #dbeafe; padding:10px 10px 12px;
   cursor:pointer; text-align:start; transition:border-color .15s, box-shadow .15s, transform .03s;
-  outline:none; display:grid; grid-template-rows:auto 42px;
+  outline:none; display:grid; grid-template-rows:auto 46px;
 }
 .category-card:hover{ box-shadow:0 1px 3px rgba(0,0,0,.08), 0 12px 24px rgba(15,23,42,.10); }
 .category-card:active{ transform:translateY(1px); }
 .category-card:focus-visible{ box-shadow:0 0 0 4px var(--ring); }
 .category-card.is-selected{ border-color:var(--accent); box-shadow:0 0 0 3px var(--ring), var(--shadow-1); }
+.category-card:disabled{ opacity:.6; cursor:not-allowed; }
 
 .category-card__image{
   width:100%; aspect-ratio:16/10; border-radius:var(--radius-md);
   object-fit:cover; background:#e6efff; display:block;
 }
 .category-card__footer{
-  margin-top:8px; height:42px; border-radius:10px; background:var(--accent); color:#fff;
+  margin-top:8px; height:46px; border-radius:10px; background:var(--accent); color:#fff;
   display:grid; place-items:center; font-weight:800; letter-spacing:.2px; font-size:var(--fs-tile);
   text-align:center; padding:0 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .category-card.is-selected .category-card__footer{
   background:linear-gradient(0deg, var(--accent) 0%, var(--accent-700) 100%);
 }
-.category-card:disabled{ opacity:.6; cursor:not-allowed; }
 
 /* Badges (optional) */
 .badge{ position:absolute; z-index:2; display:inline-flex; align-items:center; justify-content:center; white-space:nowrap; user-select:none; }
@@ -106,7 +112,7 @@ html,body{
 
 /* Chips (selected categories) */
 .chip{
-  display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 12px;
+  display:inline-flex; align-items:center; gap:8px; min-height:36px; padding:6px 12px;
   border-radius:999px; border:1px solid #c7d2fe; background:#fff; color:var(--ink);
   font-weight:800; font-size:var(--fs-base); cursor:pointer;
   transition:filter .15s, transform .03s, box-shadow .15s, border-color .15s;
@@ -131,7 +137,7 @@ html,body{
 
 /* Login-style inputs */
 .panel .auth-input{
-  width:100%; height:46px; border-radius:14px; padding:0 14px; font-size:var(--fs-base); color:var(--ink);
+  width:100%; height:52px; border-radius:14px; padding:0 14px; font-size:var(--fs-base); color:var(--ink);
   background:#f8fbff; border:1px solid #c7d2fe;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 6px 18px rgba(15,23,42,.06);
   outline:none; transition:border-color .15s ease, box-shadow .15s ease, background .15s ease;
@@ -154,7 +160,7 @@ html,body{
 /* Buttons */
 .btn{
   display:inline-flex; align-items:center; justify-content:center;
-  height:44px; padding:0 16px; border-radius:12px;
+  min-height:48px; padding:0 16px; border-radius:12px;
   border:1px solid var(--accent-700); background:var(--accent); color:#fff;
   font-weight:800; font-size:var(--fs-base); cursor:pointer;
   transition:filter .15s, transform .03s, box-shadow .15s;
@@ -169,13 +175,69 @@ html,body{
 .mt-8{ margin-top:8px; } .mt-12{ margin-top:12px; } .mt-16{ margin-top:16px; }
 .center{ display:grid; place-items:center; }
 .note{ color:var(--muted); font-size:var(--fs-base); }
-.panel { max-width: 300px; }
+
+/* Responsive panel width (fix conflict, keep 560 > 300) */
+@media (max-width: 520px){
+  .panel{ max-width: 360px; }
+}
+@media (max-width: 420px){
+  :root{ --fs-tile:14px; }
+  .panel{ max-width: 100%; }
+  .category-card__footer{ height:44px; }
+}
+
 /* RTL tweaks */
 [dir="rtl"] .badge--left{ inset-inline-start:8px; inset-inline-end:auto; }
 [dir="rtl"] .badge--right{ inset-inline-end:8px; inset-inline-start:auto; }
 
-/* Compact */
-@media (max-width:420px){
-  :root{ --fs-tile:14px; }
-  .category-card__footer{ height:40px; }
+/* For thumbnails (cropped neatly) */
+.img--thumb {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background: #f0f4ff;
+}
+
+/* For content images (fit inside without cropping) */
+.img--content {
+  width: 100%;
+  max-width: 800px;
+  aspect-ratio: 16/9;
+  object-fit: contain;
+  background: #f0f4ff;
+  border-radius: var(--radius-md);
+  margin: 0 auto;
+  display: block;
+}
+
+
+/* Force the text inside the blue footer to change */
+.category-card__footer{
+  font-size: clamp(18px, 1.5vw, 22px) !important;
+font-weight:600 !important; 
+  color: #ffffffff !important;                      /* text color */
+}
+
+/* If a card is selected, pick the text color you want there too */
+.category-card.is-selected .category-card__footer{
+  color: #ffffff !important; /* keep readable on the darker blue, adjust if needed */
+}
+/* Selected chips (blue pills) */
+.chip--selected{
+  background: var(--accent);
+  border-color: var(--accent-700);
+  color: #fff !important;                       /* make text white */
+}
+
+/* Make all chips a bit larger/bolder */
+.chip{
+  font-size: clamp(16px, 1.3vw, 18px) !important;
+  font-weight: 800 !important;
+  padding: 8px 14px;                             /* slightly larger pill */
+  min-height: 40px;
+}
+/* RTL friendliness */
+[dir="rtl"] .chip--selected{
+  padding-inline-start: 14px; /* logical props already handle sides */
 }
