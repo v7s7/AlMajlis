@@ -12,6 +12,7 @@ import Categories from "./pages/Admin/Categories";
 import Questions from "./pages/Admin/Questions";
 import NotFound from "./pages/NotFound";
 import AnswerPage from "./pages/QuestionPage/AnswerPage"; // ⬅️ NEW
+import BuyGames from "./pages/Store/BuyGames"; // ⬅️ add this import
 
 export default function App() {
   return (
@@ -26,7 +27,10 @@ export default function App() {
         <Route path="/game/:id/tile/:tileId/answer" element={<AnswerPage />} /> {/* ⬅️ NEW */}
 
         <Route path="/game/:id/results" element={<Results />} />
-
+ {/* NEW: purchase flow */}
+        <Route path="/games" element={<BuyGames />} />
+        <Route path="/pay/success" element={<div style={{padding:16}}>تم الدفع بنجاح ✅</div>} />
+        <Route path="/pay/cancel" element={<div style={{padding:16}}>تم إلغاء الدفع ❌</div>} />
         {/* Admin */}
         <Route path="/admin" element={<AdminHome />} />
         <Route path="/admin/categories" element={<Categories />} />

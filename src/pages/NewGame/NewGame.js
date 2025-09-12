@@ -10,8 +10,8 @@ import {
   query,
   serverTimestamp,
   where,
-  writeBatch,
   limit,
+  runTransaction, // ⬅️ keep: used below
 } from "firebase/firestore";
 import "../../styles/newgame.css";
 
@@ -37,16 +37,17 @@ export default function NewGame() {
     );
     return () => searchTimer.current && clearTimeout(searchTimer.current);
   }, [search]);
-const canStart = useMemo(
-  () =>
-    !!user?.uid &&
-    sel.length >= 1 &&
-    sel.length <= 6 &&
-    teamA.trim().length > 0 &&
-    teamB.trim().length > 0 &&
-    !busy,
-  [user?.uid, sel.length, teamA, teamB, busy]
-);
+
+  const canStart = useMemo(
+    () =>
+      !!user?.uid &&
+      sel.length >= 1 &&
+      sel.length <= 6 &&
+      teamA.trim().length > 0 &&
+      teamB.trim().length > 0 &&
+      !busy,
+    [user?.uid, sel.length, teamA, teamB, busy]
+  );
 
   // ---------- Load categories (once) ----------
   useEffect(() => {
@@ -148,7 +149,7 @@ const canStart = useMemo(
         checks.push({ id, v, promise: getDocs(stockQuery(id, v)) });
       }
     }
-    const results = await Promise.all(checks.map(c => c.promise));
+    const results = await Promise.all(checks.map((c) => c.promise));
     for (let i = 0; i < checks.length; i++) {
       const { id, v } = checks[i];
       const snap = results[i];
@@ -172,8 +173,7 @@ const canStart = useMemo(
       const check = await validateStockParallel(sel);
       if (!check.ok) {
         alert(check.message);
-        setBusy(false);
-        return;
+        return; // finally will reset busy
       }
 
       // 2) Fetch candidates for ALL (category,value) in parallel, limited to 10
@@ -188,7 +188,7 @@ const canStart = useMemo(
         }
       }
       const picksMap = new Map(); // key: `${categoryId}:${v}` -> questions[]
-      const snaps = await Promise.all(jobs.map(j => j.promise));
+      const snaps = await Promise.all(jobs.map((j) => j.promise));
       for (let i = 0; i < jobs.length; i++) {
         const { categoryId, v } = jobs[i];
         const docs = snaps[i].docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -210,58 +210,71 @@ const canStart = useMemo(
         perCategoryPicks.push({ categoryId, buckets });
       }
 
-      // 4) Single atomic batch (game, categories, tiles)
-      const batch = writeBatch(db);
-      const gameRef = doc(collection(db, "games"));
-      batch.set(gameRef, {
-        hostUserId: user.uid,
-        status: "active",
-        teamAName: teamA.trim(),
-        teamBName: teamB.trim(),
-        teamAScore: 0,
-        teamBScore: 0,
-        turn: "A",
-        startedAt: serverTimestamp(),
-        endedAt: null,
-      });
+      // 4) Single atomic TRANSACTION (decrement credit + create game)
+      const userRef = doc(db, "users", user.uid);
+      let newGameId = null;
 
-      // game_categories
-      const gcCol = collection(gameRef, "game_categories");
-      sel.forEach((categoryId, i) => {
-        batch.set(doc(gcCol), { position: i + 1, categoryId });
-      });
-
-      // game_tiles
-      const tilesCol = collection(gameRef, "game_tiles");
-      for (let catPos = 0; catPos < perCategoryPicks.length; catPos++) {
-        const { buckets } = perCategoryPicks[catPos];
-        for (let row = 0; row < SEQUENCE.length; row++) {
-          const { value, index } = SEQUENCE[row];
-          const qpick = buckets.get(value)[index];
-          batch.set(doc(tilesCol), {
-            categoryPosition: catPos + 1,
-            rowIndex: row + 1,
-            value,
-            opened: false,
-            questionId: qpick.id,
-            answeredBy: null,
-            correct: null,
-            questionText: qpick.text || "",
-            answerText: qpick.answer || "",
-            questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
-            answerImageUrl: qpick.answerImageUrl || "",
-          });
+      await runTransaction(db, async (trx) => {
+        // a) Check & decrement credits
+        const us = await trx.get(userRef);
+        const current = us.exists() ? Number(us.data()?.gamesRemaining ?? 0) : 0;
+        if (!Number.isFinite(current) || current < 1) {
+          throw new Error("لا توجد ألعاب متبقية في رصيدك.");
         }
-      }
+        trx.update(userRef, { gamesRemaining: current - 1 });
 
-      await batch.commit();
+        // b) Create game and children
+        const gameRef = doc(collection(db, "games"));
+        newGameId = gameRef.id;
+
+        trx.set(gameRef, {
+          hostUserId: user.uid,
+          status: "active",
+          teamAName: teamA.trim(),
+          teamBName: teamB.trim(),
+          teamAScore: 0,
+          teamBScore: 0,
+          turn: "A",
+          startedAt: serverTimestamp(),
+          endedAt: null,
+        });
+
+        // game_categories
+        const gcCol = collection(gameRef, "game_categories");
+        sel.forEach((categoryId, i) => {
+          trx.set(doc(gcCol), { position: i + 1, categoryId });
+        });
+
+        // game_tiles
+        const tilesCol = collection(gameRef, "game_tiles");
+        for (let catPos = 0; catPos < perCategoryPicks.length; catPos++) {
+          const { buckets } = perCategoryPicks[catPos];
+          for (let row = 0; row < SEQUENCE.length; row++) {
+            const { value, index } = SEQUENCE[row];
+            const qpick = buckets.get(value)[index];
+            trx.set(doc(tilesCol), {
+              categoryPosition: catPos + 1,
+              rowIndex: row + 1,
+              value,
+              opened: false,
+              questionId: qpick.id,
+              answeredBy: null,
+              correct: null,
+              questionText: qpick.text || "",
+              answerText: qpick.answer || "",
+              questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
+              answerImageUrl: qpick.answerImageUrl || "",
+            });
+          }
+        }
+      });
+
       console.timeEnd?.("newgame:start");
-      nav(`/game/${gameRef.id}`);
+      if (newGameId) nav(`/game/${newGameId}`);
     } catch (e) {
       console.error(e);
       alert(e?.message || "Failed to start game. Please try again.");
-      setBusy(false);
-      return;
+      return; // finally will reset busy
     } finally {
       setBusy(false);
     }
@@ -336,6 +349,7 @@ const canStart = useMemo(
                           alt=""
                           src={c.imageUrl}
                           className="category-card__image"
+                          loading="lazy"
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       ) : null}
