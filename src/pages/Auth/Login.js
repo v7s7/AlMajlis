@@ -1,3 +1,4 @@
+// src/pages/Auth/Login.js
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../../firebase";
@@ -52,13 +53,22 @@ export default function Login() {
         await updateProfile(cred.user, { displayName: trimmedName });
 
         // Save user doc in Firestore (store E.164 like +973xxxxxxx)
-        await setDoc(doc(db, "users", cred.user.uid), {
-          name: trimmedName,
-          email,
-          phone,
-          role: "user",
-          createdAt: serverTimestamp(),
-        });
+        const uref = doc(db, "users", cred.user.uid);
+        await setDoc(
+          uref,
+          {
+            name: trimmedName,
+            email,
+            phone,
+            role: "user",
+            createdAt: serverTimestamp(),
+            // grant 1 free game on first signup
+            gamesRemaining: 1,
+            freeSignupGranted: true,
+            freeSignupGrantedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
       }
 
       nav(redirectTo, { replace: true });
@@ -143,11 +153,7 @@ export default function Login() {
             {err && <div className="lerr">{err}</div>}
 
             <div className="lactions">
-              <button
-                type="submit"
-                className="lbtn lbtn--primary"
-                disabled={submitting}
-              >
+              <button type="submit" className="lbtn lbtn--primary" disabled={submitting}>
                 {submitting ? "Working..." : "Submit"}
               </button>
 
