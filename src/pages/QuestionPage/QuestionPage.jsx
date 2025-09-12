@@ -1,6 +1,6 @@
 // src/pages/QuestionPage/QuestionPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { db } from "../../firebase";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import "../../styles/questionpage.css";
@@ -28,6 +28,8 @@ function useCountUp(autoStart = true) {
 export default function QuestionPage() {
   const { id: gameId, tileId } = useParams();
   const nav = useNavigate();
+  const loc = useLocation();
+  const navState = loc.state || null;
 
   const [game, setGame] = useState(null);
   const [tile, setTile] = useState(null);
@@ -39,6 +41,47 @@ export default function QuestionPage() {
   const isATurn = useMemo(() => game?.turn === "A", [game]);
 
   useEffect(() => {
+    // 0) Instant hydration from GameRoom (no network)
+    if (navState) {
+      const stGame = navState.game || null;
+      const stTile = navState.tile || null;
+
+      // If question wasn't passed, build it from tile's denormalized fields (if present)
+      const stQuestion =
+        navState.question ||
+        (stTile
+          ? {
+              text: stTile.questionText || "",
+              answer: stTile.answerText || "",
+              imageUrl: stTile.questionImageUrl || "",
+              answerImageUrl: stTile.answerImageUrl || "",
+            }
+          : null);
+
+      setGame(stGame);
+      setTile(stTile);
+      setQuestion(stQuestion);
+      setCategoryName(navState.categoryName || "");
+
+      // Warm caches
+      if (stQuestion?.imageUrl) {
+        const qi = new Image();
+        qi.fetchPriority = "high";
+        qi.decoding = "async";
+        qi.src = stQuestion.imageUrl;
+      }
+      if (stQuestion?.answerImageUrl) {
+        const ai = new Image();
+        ai.fetchPriority = "high";
+        ai.decoding = "async";
+        ai.src = stQuestion.answerImageUrl;
+      }
+
+      document.title = navState.categoryName ? `السؤال — ${navState.categoryName}` : "السؤال";
+      return;
+    }
+
+    // 1) Fallback: fetch (deep link / hard refresh)
     (async () => {
       const gref = doc(db, "games", gameId);
       const gs = await getDoc(gref);
@@ -49,11 +92,19 @@ export default function QuestionPage() {
       if (!ts.exists()) return nav(`/game/${gameId}`);
       const t = { id: ts.id, ...ts.data() };
 
-      const qs = await getDoc(doc(db, "questions", t.questionId));
-      const qd = qs.exists()
-        ? qs.data()
-        : { text: "(مفقود)", answer: "", imageUrl: "" };
+      // Prefer denormalized fields if present; only read questions doc if needed
+      let qd = {
+        text: t.questionText || "",
+        answer: t.answerText || "",
+        imageUrl: t.questionImageUrl || "",
+        answerImageUrl: t.answerImageUrl || "",
+      };
+      if (!qd.text && t.questionId) {
+        const qs = await getDoc(doc(db, "questions", t.questionId));
+        qd = qs.exists() ? qs.data() : { text: "(مفقود)", answer: "", imageUrl: "" };
+      }
 
+      // Category name
       const catsSnap = await getDocs(collection(gref, "game_categories"));
       const cats = catsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const catForTile = cats.find((c) => c.position === t.categoryPosition);
@@ -66,17 +117,25 @@ export default function QuestionPage() {
       setGame({ id: gs.id, ...gs.data() });
       setTile(t);
       setQuestion(qd);
-       // Warm the cache for the answer image so reveal feels instant
- if (qd?.answerImageUrl) {
-   const img = new Image();
-   img.fetchPriority = "high";
-   img.decoding = "async";
-   img.src = qd.answerImageUrl;
- }
-     setCategoryName(catName);
+
+      // Warm the cache for images so paint is instant
+      if (qd?.imageUrl) {
+        const qi = new Image();
+        qi.fetchPriority = "high";
+        qi.decoding = "async";
+        qi.src = qd.imageUrl;
+      }
+      if (qd?.answerImageUrl) {
+        const ai = new Image();
+        ai.fetchPriority = "high";
+        ai.decoding = "async";
+        ai.src = qd.answerImageUrl;
+      }
+
+      setCategoryName(catName);
       document.title = catName ? `السؤال — ${catName}` : "السؤال";
     })();
-  }, [gameId, tileId, nav]);
+  }, [gameId, tileId, nav, navState]);
 
   // Keyboard shortcuts: Space/Enter toggle, R reset
   useEffect(() => {
@@ -105,10 +164,7 @@ export default function QuestionPage() {
           <button className="iconbtn" onClick={() => nav(`/game/${gameId}`)}>
             ↩︎ الرجوع للوحة
           </button>
-          <button
-            className="iconbtn"
-            onClick={() => nav(`/game/${gameId}/results`)}
-          >
+          <button className="iconbtn" onClick={() => nav(`/game/${gameId}/results`)}>
             ⟶ انتهاء اللعبة
           </button>
           <button className="iconbtn" onClick={() => nav(`/`)}>⎋ الخروج</button>
@@ -145,13 +201,15 @@ export default function QuestionPage() {
       >
         <div className="pointchip">{tile.value ?? 0} نقطة</div>
         <h1 className="qtext">{tile?.questionText || question?.text}</h1>
-        {question.imageUrl && (
+
+        {(tile?.questionImageUrl || question?.imageUrl) && (
           <img
             src={tile?.questionImageUrl || question?.imageUrl}
             alt=""
             className="qimage qimage--big"
-            loading="lazy"
+            loading="eager"
             decoding="async"
+            fetchpriority="high"
           />
         )}
 
@@ -159,11 +217,12 @@ export default function QuestionPage() {
         <div className="qactions">
           <button
             className="ansbtn"
-onClick={() =>
-  nav(`/game/${gameId}/tile/${tileId}/answer`, {
-    state: { game, tile, question, categoryName }
-  })
-}          >
+            onClick={() =>
+              nav(`/game/${gameId}/tile/${tileId}/answer`, {
+                state: { game, tile, question, categoryName },
+              })
+            }
+          >
             الإجابة
           </button>
         </div>
