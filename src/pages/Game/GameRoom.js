@@ -82,7 +82,7 @@ export default function GameRoom() {
   const [game, setGame] = useState(null);
   const [cats, setCats] = useState([]);
   const [tiles, setTiles] = useState([]);
-
+const qCache = useRef(new Map());
   useEffect(() => {
     const gref = doc(db, "games", id);
     const unsub = onSnapshot(gref, async (snap) => {
@@ -122,9 +122,39 @@ export default function GameRoom() {
     return m;
   }, [tiles]);
 
-  function openTile(t) {
-    if (!t || t.opened) return;
-    nav(`/game/${id}/tile/${t.id}`);
+  function getCategoryNameForTile(t) {
+    return cats.find(c => c.position === t?.categoryPosition)?.name || "";
+  }
+
+  async function prefetchTile(t) {
+    if (!t || !t.questionId || qCache.current.has(t.id)) return;
+    try {
+      const qs = await getDoc(doc(db, "questions", t.questionId));
+      if (!qs.exists()) return;
+      const d = qs.data() || {};
+      const q = {
+        text: d.text || "",
+        answer: d.answer || "",
+        imageUrl: d.questionImageUrl || d.imageUrl || "",
+        answerImageUrl: d.answerImageUrl || "",
+      };
+      // warm the browser cache for the question image
+      if (q.imageUrl) {
+        const img = new Image();
+        img.fetchPriority = "high";
+        img.decoding = "async";
+        img.src = q.imageUrl;
+      }
+      qCache.current.set(t.id, q);
+    } catch {}
+  }
+
+  function openTile(t) {    if (!t || t.opened) return;
+    const q = qCache.current.get(t.id) || null;
+ const categoryName = getCategoryNameForTile(t);
+ nav(`/game/${id}/tile/${t.id}`, {
+   state: { game, tile: t, question: q, categoryName },
+    });
   }
 
   async function adjustScore(teamKey, delta) {
@@ -181,8 +211,10 @@ export default function GameRoom() {
                   <button
                     key={`${c.position}-${rowIdx}`}
                     className={`value-btn ${opened ? "is-opened" : ""}`}
-                    onClick={() => openTile(t)}
-                    disabled={!t || opened}
+                   onClick={() => openTile(t)}
+                   onMouseEnter={() => prefetchTile(t)}
+                   onFocus={() => prefetchTile(t)}             
+                          disabled={!t || opened}
                     aria-label={`افتح سؤال ${v} في ${c.name}`}
                   >
                     {v}
