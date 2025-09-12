@@ -1,89 +1,107 @@
 /* Al Majlis — Categories admin (scoped) */
 .cats { background:#eaf2ff; color:#0f172a; }
-.cats h2 { margin: 4px 0 14px; font-weight: 900; font-size: clamp(20px, 2.4vw, 28px); }
+.cats h2 { margin:4px 0 14px; font-weight:900; font-size:clamp(20px,2.4vw,28px); }
 
 /* Inputs */
 .cats input[type="text"],
 .cats input:not([type]),
 .cats input[type="search"],
 .cats input[type="url"]{
-  height: 44px; padding: 0 12px;
-  border-radius: 12px; border: 1px solid #cfe0ff;
+  height:44px; padding:0 12px;
+  border-radius:12px; border:1px solid #cfe0ff;
   background:#fff;
-  font: inherit; color:#0f172a;
-  box-shadow: 0 1px 0 rgba(15,23,42,.02) inset;
+  font:inherit; color:#0f172a;
+  box-shadow:0 1px 0 rgba(15,23,42,.02) inset;
 }
 .cats input[type="file"]{
-  height: 44px;
-  padding: 10px 12px;
-  border-radius: 12px; border: 1px dashed #cfe0ff;
+  height:44px; padding:10px 12px;
+  border-radius:12px; border:1px dashed #cfe0ff;
   background:#fff;
-  font: inherit; color:#0f172a;
+  font:inherit; color:#0f172a;
 }
 
 /* Buttons */
 .cats button{
-  height: 44px; padding: 0 16px;
-  border-radius: 999px; border: 0;
-  background: #1d4ed8; color:#fff; font-weight: 900;
-  box-shadow: 0 6px 14px rgba(29,78,216,.22);
-  cursor: pointer; font: inherit;
-  transition: filter .15s ease, transform .03s ease;
+  height:44px; padding:0 16px;
+  border-radius:999px; border:0;
+  background:#1d4ed8; color:#fff; font-weight:900;
+  box-shadow:0 6px 14px rgba(29,78,216,.22);
+  cursor:pointer; font:inherit;
+  transition:filter .15s ease, transform .03s ease;
 }
 .cats button:disabled{ opacity:.6; cursor:not-allowed; }
-.cats button:hover:not(:disabled){ filter: brightness(1.02); }
-.cats button:active:not(:disabled){ transform: translateY(1px); }
-.cats .cats__card button{ background:#ef4444; box-shadow: 0 6px 14px rgba(239,68,68,.18); }
-.cats .cats__card button:hover{ filter: brightness(0.98); }
+.cats button:hover:not(:disabled){ filter:brightness(1.02); }
+.cats button:active:not(:disabled){ transform:translateY(1px); }
+.cats .cats__card button{ background:#ef4444; box-shadow:0 6px 14px rgba(239,68,68,.18); }
+.cats .cats__card button:hover{ filter:brightness(0.98); }
 
 /* Cards */
-.cats__grid { margin-top: 12px; }
+.cats__grid { margin-top:12px; }
 .cats__card{
+  position:relative;
   background:#fff;
-  border: 1px solid #dbeafe;
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 6px 16px rgba(2,6,23,.06);
-  transition: border-color .15s ease, box-shadow .15s ease, transform .06s ease;
+  border:1px solid #dbeafe;
+  border-radius:16px;
+  padding:12px;
+  box-shadow:0 6px 16px rgba(2,6,23,.06);
+  transition:border-color .15s ease, box-shadow .15s ease, transform .06s ease;
+  overflow:hidden; /* ✔ prevents any media from spilling outside */
 }
 .cats__card:hover{
   border-color:#bfdbfe;
-  box-shadow: 0 10px 22px rgba(2,6,23,.10);
-  transform: translateY(-1px);
+  box-shadow:0 10px 22px rgba(2,6,23,.10);
+  transform:translateY(-1px);
 }
 
-/* Cloudinary image (if your component doesn’t already size it) */
-.cats .cldimage,           /* if your component adds a class */
-.cats img{                 /* fallback */
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 10px;
-  background: #f1f5f9;
+/* --- Thumbnails: FIT INSIDE CARD (scoped to card only) --- */
+/* Direct media node (img / picture / cloudinary wrapper) */
+.cats .cats__card > img,
+.cats .cats__card > picture,
+.cats .cats__card > .cldimage{
+  width:100% !important;
+  height:120px !important;
+  display:block !important;
+  border-radius:10px !important;
+  background:#f1f5f9 !important;
+  overflow:hidden !important;
+  margin:0 !important;
 }
+
+/* Inner <img> inside wrappers */
+.cats .cats__card picture > img,
+.cats .cats__card .cldimage > img,
+.cats .cats__card .cldimage img{
+  width:100% !important;
+  height:100% !important;
+  display:block !important;
+  object-fit:cover !important;
+  border-radius:10px !important;
+}
+
+/* Safety: stop wrappers from forcing oversized widths */
+.cats .cats__card .cldimage,
+.cats .cats__card picture{ max-width:100% !important; }
 
 /* Helper text */
 .cats .hint{ color:#64748b; font-weight:700; }
 
 /* Safe focus */
-.cats :focus-visible{ outline: 2px solid #1d4ed8; outline-offset: 2px; }
+.cats :focus-visible{ outline:2px solid #1d4ed8; outline-offset:2px; }
 
-/* Mobile spacing */
-@media (max-width: 600px){
-  .cats { padding: 12px; }
-  .cats h2 { margin-bottom: 10px; }
-}
 /* Top row: title + back button */
 .cats__top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
 }
 
 /* Keep heading tight with the row */
 .cats h2{
-  margin: 4px 0 6px;
+  margin:4px 0 6px;
   font-weight:900;
-  font-size: clamp(20px, 2.4vw, 28px);
+  font-size:clamp(20px,2.4vw,28px);
+}
+
+/* Mobile spacing */
+@media (max-width:600px){
+  .cats{ padding:12px; }
+  .cats h2{ margin-bottom:10px; }
 }

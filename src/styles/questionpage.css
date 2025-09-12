@@ -76,7 +76,7 @@
 .qimage{
   width: min(980px, 92%);
   max-height: min(52vh, 520px); /* responsive cap so it won’t overflow */
-  object-fit: cover; border-radius: 10px;
+  object-fit: contain; border-radius: 10px ;background:#fff;
 }
 .qimage--big { margin-top: 8px; }
 
