@@ -9,10 +9,9 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   where,
-  getCountFromServer,
   writeBatch,
+  limit,
 } from "firebase/firestore";
 import "../../styles/newgame.css";
 
@@ -38,6 +37,16 @@ export default function NewGame() {
     );
     return () => searchTimer.current && clearTimeout(searchTimer.current);
   }, [search]);
+const canStart = useMemo(
+  () =>
+    !!user?.uid &&
+    sel.length >= 1 &&
+    sel.length <= 6 &&
+    teamA.trim().length > 0 &&
+    teamB.trim().length > 0 &&
+    !busy,
+  [user?.uid, sel.length, teamA, teamB, busy]
+);
 
   // ---------- Load categories (once) ----------
   useEffect(() => {
@@ -68,7 +77,7 @@ export default function NewGame() {
     return allCats.filter((c) => c.name?.toLowerCase().includes(queryText));
   }, [allCats, queryText]);
 
-  // ---------- Group by type (for clear containers) ----------
+  // ---------- Group by type ----------
   const grouped = useMemo(() => {
     const map = new Map();
     for (const c of cats) {
@@ -76,13 +85,12 @@ export default function NewGame() {
       if (!map.has(t)) map.set(t, []);
       map.get(t).push(c);
     }
-    // Sort groups alphabetically by type, but keep "Other" last
     const entries = Array.from(map.entries()).sort((a, b) => {
       if (a[0] === "Other") return 1;
       if (b[0] === "Other") return -1;
       return a[0].localeCompare(b[0], undefined, { sensitivity: "base" });
     });
-    return entries; // [ [type, cats[]], ... ]
+    return entries;
   }, [cats]);
 
   function toggle(id) {
@@ -100,21 +108,31 @@ export default function NewGame() {
     { value: 600, index: 1 },
   ];
 
-  async function fetchQuestions(categoryId, value) {
-    const qy = query(
+  // Small, fast query (only check if >=2 exist)
+  function stockQuery(categoryId, value) {
+    return query(
       collection(db, "questions"),
       where("categoryId", "==", categoryId),
       where("value", "==", value),
-      where("isActive", "==", true)
+      where("isActive", "==", true),
+      limit(2)
     );
-    const snap = await getDocs(qy);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+
+  // We only need 2; pull at most 10 to keep reads quick (and still randomize)
+  function pickQuery(categoryId, value) {
+    return query(
+      collection(db, "questions"),
+      where("categoryId", "==", categoryId),
+      where("value", "==", value),
+      where("isActive", "==", true),
+      limit(10)
+    );
   }
 
   function sampleK(arr, k) {
     const a = [...arr];
     if (a.length < k) throw new Error(`Not enough items to sample ${k}`);
-    // Fisher–Yates
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
@@ -122,35 +140,25 @@ export default function NewGame() {
     return a.slice(0, k);
   }
 
-  async function validateStock(categoryIds) {
+  async function validateStockParallel(categoryIds) {
+    // Build ALL tiny stock-check queries, run in parallel
+    const checks = [];
     for (const id of categoryIds) {
       for (const v of VALUES) {
-        const qy = query(
-          collection(db, "questions"),
-          where("categoryId", "==", id),
-          where("value", "==", v),
-          where("isActive", "==", true)
-        );
-        const count = (await getCountFromServer(qy)).data().count || 0;
-        if (count < 2) {
-          const name = allCats.find((c) => c.id === id)?.name || id;
-          return { ok: false, message: `Category "${name}" needs at least 2 questions for ${v}.` };
-        }
+        checks.push({ id, v, promise: getDocs(stockQuery(id, v)) });
+      }
+    }
+    const results = await Promise.all(checks.map(c => c.promise));
+    for (let i = 0; i < checks.length; i++) {
+      const { id, v } = checks[i];
+      const snap = results[i];
+      if (snap.size < 2) {
+        const name = allCats.find((c) => c.id === id)?.name || id;
+        return { ok: false, message: `Category "${name}" needs at least 2 questions for ${v}.` };
       }
     }
     return { ok: true };
   }
-
-  const canStart = useMemo(
-    () =>
-      !!user?.uid &&
-      sel.length >= 1 &&
-      sel.length <= 6 &&
-      teamA.trim().length > 0 &&
-      teamB.trim().length > 0 &&
-      !busy,
-    [user?.uid, sel.length, teamA, teamB, busy]
-  );
 
   async function start() {
     if (!user?.uid) return alert("You must be signed in.");
@@ -158,38 +166,56 @@ export default function NewGame() {
     if (busy) return;
 
     setBusy(true);
+    console.time?.("newgame:start");
     try {
-      // 1) Stock check (cheap counts)
-      const check = await validateStock(sel);
+      // 1) Fast stock check (all in parallel)
+      const check = await validateStockParallel(sel);
       if (!check.ok) {
         alert(check.message);
         setBusy(false);
         return;
       }
 
-      // 2) Pre-pick all questions (real fetches) BEFORE any writes
+      // 2) Fetch candidates for ALL (category,value) in parallel, limited to 10
+      const jobs = [];
+      for (const categoryId of sel) {
+        for (const v of VALUES) {
+          jobs.push({
+            categoryId,
+            v,
+            promise: getDocs(pickQuery(categoryId, v)),
+          });
+        }
+      }
+      const picksMap = new Map(); // key: `${categoryId}:${v}` -> questions[]
+      const snaps = await Promise.all(jobs.map(j => j.promise));
+      for (let i = 0; i < jobs.length; i++) {
+        const { categoryId, v } = jobs[i];
+        const docs = snaps[i].docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (docs.length < 2) {
+          throw new Error(`Not enough questions after validation for category ${categoryId}, value ${v}.`);
+        }
+        picksMap.set(`${categoryId}:${v}`, docs);
+      }
+
+      // 3) Compose perCategoryPicks by sampling locally
       const perCategoryPicks = [];
       for (let catPos = 0; catPos < sel.length; catPos++) {
         const categoryId = sel[catPos];
         const buckets = new Map();
         for (const v of VALUES) {
-          const all = await fetchQuestions(categoryId, v);
-          if (all.length < 2) {
-            throw new Error(
-              `Not enough questions after validation for category ${categoryId}, value ${v}.`
-            );
-          }
+          const all = picksMap.get(`${categoryId}:${v}`) || [];
           buckets.set(v, sampleK(all, 2));
         }
         perCategoryPicks.push({ categoryId, buckets });
       }
 
-      // 3) Single atomic batch (game, categories, tiles)
+      // 4) Single atomic batch (game, categories, tiles)
       const batch = writeBatch(db);
       const gameRef = doc(collection(db, "games"));
       batch.set(gameRef, {
         hostUserId: user.uid,
-        status: "active", // we commit everything at once, so activate directly
+        status: "active",
         teamAName: teamA.trim(),
         teamBName: teamB.trim(),
         teamAScore: 0,
@@ -220,19 +246,22 @@ export default function NewGame() {
             questionId: qpick.id,
             answeredBy: null,
             correct: null,
-             questionText: qpick.text || "",
-answerText: qpick.answer || "",
-questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
-answerImageUrl: qpick.answerImageUrl || "",
+            questionText: qpick.text || "",
+            answerText: qpick.answer || "",
+            questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
+            answerImageUrl: qpick.answerImageUrl || "",
           });
         }
       }
 
       await batch.commit();
+      console.timeEnd?.("newgame:start");
       nav(`/game/${gameRef.id}`);
     } catch (e) {
       console.error(e);
       alert(e?.message || "Failed to start game. Please try again.");
+      setBusy(false);
+      return;
     } finally {
       setBusy(false);
     }
@@ -343,7 +372,7 @@ answerImageUrl: qpick.answerImageUrl || "",
             />
 
             <button className="btn mt-12" onClick={start} disabled={!canStart}>
-              {busy ? "Starting… Wait 10 Sec Please" : "Start Game"}
+              {busy ? "Starting…" : "Start Game"}
             </button>
 
             {!user?.uid && (

@@ -26,7 +26,6 @@ function Timer() {
   );
 }
 
-/** بطاقة نقاط بسيطة: زر -50 وزر +50 */
 function ScoreCard({ name, score, onMinus, onPlus }) {
   const wrap = {
     display: "flex",
@@ -79,40 +78,69 @@ function ScoreCard({ name, score, onMinus, onPlus }) {
 export default function GameRoom() {
   const { id } = useParams();
   const nav = useNavigate();
+
   const [game, setGame] = useState(null);
   const [cats, setCats] = useState([]);
   const [tiles, setTiles] = useState([]);
-const qCache = useRef(new Map());
+
+  // cache of prefetched question payloads by tile.id
+  const qCache = useRef(new Map());
+
+  // --- Subscribe to game doc (fast, cached) ---
   useEffect(() => {
     const gref = doc(db, "games", id);
-    const unsub = onSnapshot(gref, async (snap) => {
+    const unsub = onSnapshot(gref, (snap) => {
       if (!snap.exists()) return;
-      const g = snap.data();
-      setGame({ id: snap.id, ...g });
-
-      // categories (ordered)
-      const catsSnap = await getDocs(collection(gref, "game_categories"));
-      const raw = catsSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a,b)=>a.position-b.position);
-
-      const enriched = await Promise.all(raw.map(async r => {
-        const cs = await getDoc(doc(db, "categories", r.categoryId));
-        const cd = cs.exists() ? cs.data() : { name: "(محذوف)", imageUrl:"" };
-        return { position: r.position, categoryId: r.categoryId, name: cd.name, imageUrl: cd.imageUrl };
-      }));
-      setCats(enriched);
-
-      // tiles
-      const tsnap = await getDocs(collection(gref, "game_tiles"));
-      setTiles(tsnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setGame({ id: snap.id, ...snap.data() });
     });
     return () => unsub();
   }, [id]);
 
-  const columns = useMemo(() => (cats.length || 0), [cats]);
+  // --- Subscribe to tiles live (fast return from Answer) ---
+  useEffect(() => {
+    const tilesCol = collection(doc(db, "games", id), "game_tiles");
+    const unsub = onSnapshot(tilesCol, (tsnap) => {
+      const list = tsnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setTiles(list);
 
-  // 6-row sequence (matches seeding)
+      // If all tiles are opened, go to results (avoid loops)
+      if (list.length > 0 && list.every(t => t.opened)) {
+        if (!window.location.pathname.endsWith("/results")) {
+          nav(`/game/${id}/results`);
+        }
+      }
+    });
+    return () => unsub();
+  }, [id, nav]);
+
+  // --- Load categories once (not on every game change) ---
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const gref = doc(db, "games", id);
+      const catsSnap = await getDocs(collection(gref, "game_categories"));
+      const raw = catsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => a.position - b.position);
+
+      const enriched = await Promise.all(
+        raw.map(async r => {
+          const cs = await getDoc(doc(db, "categories", r.categoryId));
+          const cd = cs.exists() ? cs.data() : { name: "(محذوف)", imageUrl: "" };
+          return {
+            position: r.position,
+            categoryId: r.categoryId,
+            name: cd.name,
+            imageUrl: cd.imageUrl
+          };
+        })
+      );
+      if (!cancelled) setCats(enriched);
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const columns = useMemo(() => (cats.length || 0), [cats]);
   const ROW_VALUES = [200, 200, 400, 400, 600, 600];
 
   // Fast lookup: "catPos:rowIndex" -> tile
@@ -138,7 +166,6 @@ const qCache = useRef(new Map());
         imageUrl: d.questionImageUrl || d.imageUrl || "",
         answerImageUrl: d.answerImageUrl || "",
       };
-      // warm the browser cache for the question image
       if (q.imageUrl) {
         const img = new Image();
         img.fetchPriority = "high";
@@ -146,21 +173,24 @@ const qCache = useRef(new Map());
         img.src = q.imageUrl;
       }
       qCache.current.set(t.id, q);
-    } catch {}
+    } catch {
+      // swallow prefetch errors
+    }
   }
 
-  function openTile(t) {    if (!t || t.opened) return;
+  function openTile(t) {
+    if (!t || t.opened) return;
     const q = qCache.current.get(t.id) || null;
- const categoryName = getCategoryNameForTile(t);
- nav(`/game/${id}/tile/${t.id}`, {
-   state: { game, tile: t, question: q, categoryName },
+    const categoryName = getCategoryNameForTile(t);
+    nav(`/game/${id}/tile/${t.id}`, {
+      state: { game, tile: t, question: q, categoryName },
     });
   }
 
   async function adjustScore(teamKey, delta) {
     const gRef = doc(db, "games", id);
-    const nextA = Math.max(0, (game.teamAScore || 0) + (teamKey === "A" ? delta : 0));
-    const nextB = Math.max(0, (game.teamBScore || 0) + (teamKey === "B" ? delta : 0));
+    const nextA = Math.max(0, (game?.teamAScore || 0) + (teamKey === "A" ? delta : 0));
+    const nextB = Math.max(0, (game?.teamBScore || 0) + (teamKey === "B" ? delta : 0));
     try {
       await updateDoc(gRef, { teamAScore: nextA, teamBScore: nextB });
       setGame((old) => ({ ...old, teamAScore: nextA, teamBScore: nextB }));
@@ -191,9 +221,7 @@ const qCache = useRef(new Map());
 
       <div className="container">
         {/* Timer & End */}
-        <div className="controls">
-          
-        </div>
+        <div className="controls"></div>
 
         {/* Board */}
         <div className="board" style={{ ['--col-count']: columns }}>
@@ -211,10 +239,10 @@ const qCache = useRef(new Map());
                   <button
                     key={`${c.position}-${rowIdx}`}
                     className={`value-btn ${opened ? "is-opened" : ""}`}
-                   onClick={() => openTile(t)}
-                   onMouseEnter={() => prefetchTile(t)}
-                   onFocus={() => prefetchTile(t)}             
-                          disabled={!t || opened}
+                    onClick={() => openTile(t)}
+                    onMouseEnter={() => prefetchTile(t)}
+                    onFocus={() => prefetchTile(t)}
+                    disabled={!t || opened}
                     aria-label={`افتح سؤال ${v} في ${c.name}`}
                   >
                     {v}
@@ -225,7 +253,7 @@ const qCache = useRef(new Map());
           ))}
         </div>
 
-        {/* Scores: أزرار -50 و +50 فقط */}
+        {/* Scores */}
         <div className="footer" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <ScoreCard
             name={game.teamAName}
