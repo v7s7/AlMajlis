@@ -129,7 +129,7 @@ export default function AnswerPage() {
       }
 
       // Parallel writes, then navigate immediately (GameRoom listens via onSnapshot)
-      await Promise.all([
+       Promise.all([
         updateDoc(tref, { opened: true, answeredBy: to, correct }),
         updateDoc(gref, {
           teamAScore: next.teamAScore,
@@ -137,9 +137,8 @@ export default function AnswerPage() {
           turn: game.turn === "A" ? "B" : "A",
           updatedAt: serverTimestamp(),
         }),
-      ]);
-
-      nav(`/game/${gameId}`);
+     ]).catch(console.error);
+     nav(`/game/${gameId}`);
     } finally {
       setBusy(false);
     }

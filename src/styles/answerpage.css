@@ -122,3 +122,17 @@
   margin-top: 8px;
   display: block;
 }
+:root { --top-gap: 20px; }        /* default gap under the top bar */
+
+.abar {
+  /* existing styles... */
+  margin-bottom: var(--top-gap);  /* <-- add this */
+}
+
+@media (max-width: 600px) {
+  :root { --top-gap: 12px; }      /* smaller gap on phones */
+}
+.astage { 
+  /* existing styles... */
+  margin-top: 24px;               /* was 18px */
+}
