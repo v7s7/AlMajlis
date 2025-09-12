@@ -1,6 +1,6 @@
 // src/pages/QuestionPage/AnswerPage.jsx
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { db } from "../../firebase";
 import {
   collection, doc, getDoc, getDocs, limit, query, updateDoc, where, serverTimestamp
@@ -10,7 +10,8 @@ import "../../styles/answerpage.css";
 export default function AnswerPage() {
   const { id: gameId, tileId } = useParams();
   const nav = useNavigate();
-
+const loc = useLocation();
+const navState = loc.state || null;
   const [game, setGame] = useState(null);
   const [tile, setTile] = useState(null);
   const [question, setQuestion] = useState(null);
@@ -18,8 +19,17 @@ export default function AnswerPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const gref = doc(db, "games", gameId);
+// If QuestionPage handed us the data, hydrate immediately (no network)
+if (navState) {
+  setGame(navState.game || null);
+  setTile(navState.tile || null);
+  setQuestion(navState.question || null);
+  setCategoryName(navState.categoryName || "");
+  return; // skip fetching
+}
+
+(async () => {   
+     const gref = doc(db, "games", gameId);
       const gs = await getDoc(gref);
       if (!gs.exists()) return nav("/");
 
@@ -44,8 +54,7 @@ const qd = qs.exists() ? qs.data() : { text: "", answer: "", imageUrl: "", answe
       setQuestion(qd);
       setCategoryName(catName);
     })();
-  }, [gameId, tileId, nav]);
-
+}, [gameId, tileId, nav, navState]);
   async function assign(to) {
     if (!game || !tile || busy) return;
     setBusy(true);
@@ -97,14 +106,14 @@ const qd = qs.exists() ? qs.data() : { text: "", answer: "", imageUrl: "", answe
 
       {/* Answer stage */}
       <div className="astage container">
-        <div className="answer">الإجابة: <strong>{question.answer}</strong></div>
+        <div className="answer">الإجابة: <strong>{tile?.answerText || question?.answer}</strong></div>
 {question.answerImageUrl && (
   <img
-    src={question.answerImageUrl}
-    alt=""
-    className="aimage"
-    loading="lazy"
-    decoding="async"
+src={tile?.answerImageUrl || question?.answerImageUrl}    alt=""
+   className="aimage"
+ loading="eager"
+ fetchpriority="high"
+ decoding="async"
   />
 )}
         <div className="assignrow">

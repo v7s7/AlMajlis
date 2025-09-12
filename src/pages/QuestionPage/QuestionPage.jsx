@@ -66,7 +66,14 @@ export default function QuestionPage() {
       setGame({ id: gs.id, ...gs.data() });
       setTile(t);
       setQuestion(qd);
-      setCategoryName(catName);
+       // Warm the cache for the answer image so reveal feels instant
+ if (qd?.answerImageUrl) {
+   const img = new Image();
+   img.fetchPriority = "high";
+   img.decoding = "async";
+   img.src = qd.answerImageUrl;
+ }
+     setCategoryName(catName);
       document.title = catName ? `السؤال — ${catName}` : "السؤال";
     })();
   }, [gameId, tileId, nav]);
@@ -88,7 +95,7 @@ export default function QuestionPage() {
   if (!game || !tile || !question) return null;
 
   // Fallback: add .has-image for browsers without :has()
-  const hasImage = Boolean(question.imageUrl);
+  const hasImage = Boolean(tile?.questionImageUrl || question?.imageUrl);
 
   return (
     <div className="qpage qpage--full" dir="rtl">
@@ -137,10 +144,10 @@ export default function QuestionPage() {
         className={`qstage qstage--full container${hasImage ? " has-image" : ""}`}
       >
         <div className="pointchip">{tile.value ?? 0} نقطة</div>
-        <h1 className="qtext">{question.text}</h1>
+        <h1 className="qtext">{tile?.questionText || question?.text}</h1>
         {question.imageUrl && (
           <img
-            src={question.imageUrl}
+            src={tile?.questionImageUrl || question?.imageUrl}
             alt=""
             className="qimage qimage--big"
             loading="lazy"
@@ -152,8 +159,11 @@ export default function QuestionPage() {
         <div className="qactions">
           <button
             className="ansbtn"
-            onClick={() => nav(`/game/${gameId}/tile/${tileId}/answer`)}
-          >
+onClick={() =>
+  nav(`/game/${gameId}/tile/${tileId}/answer`, {
+    state: { game, tile, question, categoryName }
+  })
+}          >
             الإجابة
           </button>
         </div>

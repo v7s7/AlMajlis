@@ -220,6 +220,10 @@ export default function NewGame() {
             questionId: qpick.id,
             answeredBy: null,
             correct: null,
+             questionText: qpick.text || "",
+answerText: qpick.answer || "",
+questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
+answerImageUrl: qpick.answerImageUrl || "",
           });
         }
       }
