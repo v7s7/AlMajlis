@@ -63,10 +63,10 @@ const styles = {
 
 // FIX: Use explicit env mapping at build-time (more reliable than dynamic process.env[key])
 const PLANS = [
-  { key: "1", label: "لعبة واحدة", url: process.env.REACT_APP_LS_BUY_1, price: "BHD 1.500" },
-  { key: "2", label: "٢ ألعاب",    url: process.env.REACT_APP_LS_BUY_2, price: "BHD 2.500" },
-  { key: "5", label: "٥ ألعاب",    url: process.env.REACT_APP_LS_BUY_5, price: "BHD 5.500" },
-  { key: "8", label: "٨ ألعاب",    url: process.env.REACT_APP_LS_BUY_8, price: "BHD 8.500" },
+  { key: "1", label: "لعبة واحدة", url: process.env.REACT_APP_LS_BUY_1, price: "BHD 1.900" },
+  { key: "2", label: "لعبتين",    url: process.env.REACT_APP_LS_BUY_2, price: "BHD 2.900" },
+  { key: "5", label: "خمس ألعاب",    url: process.env.REACT_APP_LS_BUY_5, price: "BHD 5.900" },
+  { key: "8", label: "عشر ألعاب",    url: process.env.REACT_APP_LS_BUY_8, price: "BHD 9.900" },
 ];
 
 export default function BuyGames() {
