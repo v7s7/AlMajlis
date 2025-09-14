@@ -154,7 +154,10 @@ export default function QuestionPage() {
   if (!game || !tile || !question) return null;
 
   // Fallback: add .has-image for browsers without :has()
-  const hasImage = Boolean(tile?.questionImageUrl || question?.imageUrl);
+ // ✅ no hooks, so hook order is stable
+const imgSrc = (tile?.questionImageUrl || question?.imageUrl) || "";
+const hasImage = Boolean(imgSrc);
+
 
   return (
     <div className="qpage qpage--full" dir="rtl">
@@ -202,15 +205,30 @@ export default function QuestionPage() {
         <div className="pointchip">{tile.value ?? 0} نقطة</div>
         <h1 className="qtext">{tile?.questionText || question?.text}</h1>
 
-        {(tile?.questionImageUrl || question?.imageUrl) && (
-          <img
-            src={tile?.questionImageUrl || question?.imageUrl}
-            alt=""
-            className="qimage qimage--big"
-            loading="eager"
-            decoding="async"
-            fetchpriority="high"
-          />
+        {imgSrc && (
+          <>
+            {/* Clickable image opens CSS lightbox */}
+            <a href={`#zoom-qimage-${tileId}`} className="qzoom">
+              <img
+                src={imgSrc}
+                alt=""
+                className="qimage qimage--big"
+                loading="eager"
+                decoding="async"
+                fetchpriority="high"
+              />
+            </a>
+
+            {/* Lightbox overlay (appears only when targeted) */}
+            <a
+              href="#"
+              id={`zoom-qimage-${tileId}`}
+              className="qimage-lightbox"
+              aria-label="إغلاق الصورة"
+            >
+              <img src={imgSrc} alt="" />
+            </a>
+          </>
         )}
 
         {/* bottom actions: go to separate answer page */}

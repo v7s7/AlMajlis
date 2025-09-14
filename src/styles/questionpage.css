@@ -129,3 +129,78 @@
   .qbar { padding-block: max(10px, env(safe-area-inset-top)); }
   .qactions { bottom: max(16px, env(safe-area-inset-bottom)); }
 }
+
+/* --- Click-to-zoom (CSS-only lightbox) --- */
+.qimage { cursor: zoom-in; }
+
+/* If the image is wrapped in <a href="#zoom-qimage-...">, keep its box identical */
+.qstage a[href^="#zoom-qimage"] {
+  display: inline-block;         /* prevent inline quirks */
+  line-height: 0;                /* remove baseline gap around the image */
+  text-decoration: none;         /* no underline */
+}
+
+/* Overlay */
+.qimage-lightbox {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0,0,0,.85);
+  z-index: 9999;
+  cursor: zoom-out;
+}
+
+/* Show on target */
+.qimage-lightbox:target { display: flex; }
+
+/* Zoomed image */
+.qimage-lightbox img {
+  max-width: min(96vw, 1400px);
+  max-height: 92vh;
+  border-radius: 14px;
+  background: #fff;
+  object-fit: contain;
+}
+
+/* Optional: prevent background scroll when zoomed (modern browsers) */
+body:has(.qimage-lightbox:target) { overflow: hidden; }
+/* Keep base image size when wrapped in <a> */
+.qstage a[href^="#zoom-qimage"] { 
+  display: inline-block;
+  text-decoration: none;
+}
+.qstage a[href^="#zoom-qimage"] .qimage {
+  display: block;           /* prevents inline shrink */
+  width: min(980px, 92%);   /* same as your original */
+  max-height: min(52vh, 520px);
+}
+
+/* Make the zoomed image actually big */
+.qimage-lightbox img {
+  display: block;
+  width: min(96vw, 1600px);   /* force it to scale up to viewport */
+  height: auto;               /* keep aspect ratio */
+  max-height: 92vh;           /* fit vertically */
+  object-fit: contain;
+  border-radius: 14px;
+  background: #fff;
+}
+
+/* If your global CSS has img { max-width:100% }, neutralize it here */
+.qimage-lightbox img { max-width: none; }
+/* Anchor shouldn't affect layout of the image */
+.qzoom { display: contents; }              /* removes wrapper box; click still works */
+.qzoom:link, .qzoom:visited { text-decoration: none; }
+
+/* Belt-and-suspenders: ensure base image keeps prior dimensions */
+.qstage .qzoom .qimage {
+  display: block;
+  width: min(980px, 92%);          /* exactly your original */
+  max-height: min(52vh, 520px);    /* exactly your original */
+}
+
+/* If you still keep the earlier inline-block rule, this overrides it */
+.qstage a[href^="#zoom-qimage"] { display: contents; line-height: 0; }
