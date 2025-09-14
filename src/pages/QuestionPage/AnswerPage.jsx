@@ -1,10 +1,11 @@
 // src/pages/QuestionPage/AnswerPage.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { db } from "../../firebase";
 import {
   collection, doc, getDoc, getDocs, updateDoc, serverTimestamp
 } from "firebase/firestore";
+import CldImage from "../../components/CldImage";
 import "../../styles/answerpage.css";
 
 export default function AnswerPage() {
@@ -19,19 +20,31 @@ export default function AnswerPage() {
   const [categoryName, setCategoryName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // helpers
+  const isVideoUrl = (u = "") => /\.(mp4|webm|ogv|ogg|mov|m4v)$/i.test((u || "").toLowerCase());
+  const inferType = (url, declared) => declared || (isVideoUrl(url) ? "video" : "image");
+
   useEffect(() => {
     // If QuestionPage handed us the data, hydrate immediately (no network)
     if (navState) {
       const stGame = navState.game || null;
       const stTile = navState.tile || null;
+
+      // normalize question shape
       const stQuestion =
         navState.question ||
         (stTile
           ? {
               text: stTile.questionText || "",
               answer: stTile.answerText || "",
-              imageUrl: stTile.questionImageUrl || "",
+              // question media
+              questionImageUrl: stTile.questionImageUrl || stTile.imageUrl || "",
+              questionImagePublicId: stTile.questionImagePublicId || stTile.imagePublicId || "",
+              questionMediaType: stTile.questionMediaType || inferType(stTile.questionImageUrl || stTile.imageUrl),
+              // answer media
               answerImageUrl: stTile.answerImageUrl || "",
+              answerImagePublicId: stTile.answerImagePublicId || "",
+              answerMediaType: stTile.answerMediaType || inferType(stTile.answerImageUrl),
             }
           : null);
 
@@ -39,20 +52,6 @@ export default function AnswerPage() {
       setTile(stTile);
       setQuestion(stQuestion);
       setCategoryName(navState.categoryName || "");
-
-      // Warm caches
-      if (stQuestion?.imageUrl) {
-        const qi = new Image();
-        qi.fetchPriority = "high";
-        qi.decoding = "async";
-        qi.src = stQuestion.imageUrl;
-      }
-      if (stQuestion?.answerImageUrl) {
-        const ai = new Image();
-        ai.fetchPriority = "high";
-        ai.decoding = "async";
-        ai.src = stQuestion.answerImageUrl;
-      }
       return;
     }
 
@@ -67,16 +66,42 @@ export default function AnswerPage() {
       if (!ts.exists()) return nav(`/game/${gameId}`);
       const t = { id: ts.id, ...ts.data() };
 
-      // Prefer denormalized fields; only read question doc if needed
+      // Prefer denormalized fields on the tile; else read the question doc
       let qd = {
         text: t.questionText || "",
         answer: t.answerText || "",
-        imageUrl: t.questionImageUrl || "",
+        // question media (denormalized)
+        questionImageUrl: t.questionImageUrl || t.imageUrl || "",
+        questionImagePublicId: t.questionImagePublicId || t.imagePublicId || "",
+        questionMediaType: t.questionMediaType || inferType(t.questionImageUrl || t.imageUrl),
+        // answer media (denormalized)
         answerImageUrl: t.answerImageUrl || "",
+        answerImagePublicId: t.answerImagePublicId || "",
+        answerMediaType: t.answerMediaType || inferType(t.answerImageUrl),
       };
-      if (!qd.text && t.questionId) {
+
+      // If no text/media denormalized, pull the master question doc
+      if ((!qd.text && !qd.questionImageUrl) && t.questionId) {
         const qs = await getDoc(doc(db, "questions", t.questionId));
-        qd = qs.exists() ? qs.data() : { text: "", answer: "", imageUrl: "", answerImageUrl: "" };
+        if (qs.exists()) {
+          const qData = qs.data();
+          qd = {
+            text: qData.text || "",
+            answer: qData.answer || "",
+            questionImageUrl: qData.questionImageUrl || qData.imageUrl || "",
+            questionImagePublicId: qData.questionImagePublicId || qData.imagePublicId || "",
+            questionMediaType: qData.questionMediaType || inferType(qData.questionImageUrl || qData.imageUrl),
+            answerImageUrl: qData.answerImageUrl || "",
+            answerImagePublicId: qData.answerImagePublicId || "",
+            answerMediaType: qData.answerMediaType || inferType(qData.answerImageUrl),
+          };
+        } else {
+          qd = {
+            text: "", answer: "",
+            questionImageUrl: "", questionImagePublicId: "", questionMediaType: "image",
+            answerImageUrl: "", answerImagePublicId: "", answerMediaType: "image",
+          };
+        }
       }
 
       // Category name
@@ -93,20 +118,6 @@ export default function AnswerPage() {
       setTile(t);
       setQuestion(qd);
       setCategoryName(catName);
-
-      // Warm caches
-      if (qd?.imageUrl) {
-        const qi = new Image();
-        qi.fetchPriority = "high";
-        qi.decoding = "async";
-        qi.src = qd.imageUrl;
-      }
-      if (qd?.answerImageUrl) {
-        const ai = new Image();
-        ai.fetchPriority = "high";
-        ai.decoding = "async";
-        ai.src = qd.answerImageUrl;
-      }
     })();
   }, [gameId, tileId, nav, navState]);
 
@@ -128,8 +139,8 @@ export default function AnswerPage() {
         else next.teamBScore += tile.value;
       }
 
-      // Parallel writes, then navigate immediately (GameRoom listens via onSnapshot)
-       Promise.all([
+      // Fire and go back
+      Promise.all([
         updateDoc(tref, { opened: true, answeredBy: to, correct }),
         updateDoc(gref, {
           teamAScore: next.teamAScore,
@@ -137,8 +148,8 @@ export default function AnswerPage() {
           turn: game.turn === "A" ? "B" : "A",
           updatedAt: serverTimestamp(),
         }),
-     ]).catch(console.error);
-     nav(`/game/${gameId}`);
+      ]).catch(console.error);
+      nav(`/game/${gameId}`);
     } finally {
       setBusy(false);
     }
@@ -146,7 +157,14 @@ export default function AnswerPage() {
 
   if (!game || !tile || !question) return null;
 
-  const answerImgUrl = tile?.answerImageUrl || question?.answerImageUrl || "";
+  // Derive what to show
+  const answerText = (tile?.answerText ?? question?.answer ?? "") || "";
+  const aUrl = tile?.answerImageUrl || question?.answerImageUrl || "";
+  const aPublicId = tile?.answerImagePublicId || question?.answerImagePublicId || "";
+  const aType = inferType(aUrl, question?.answerMediaType || tile?.answerMediaType);
+
+  // If there is no text answer but there is media, we still render correctly
+  const showAnswerText = !!answerText.trim();
 
   return (
     <div className="apage" dir="rtl">
@@ -161,19 +179,33 @@ export default function AnswerPage() {
 
       {/* Answer stage */}
       <div className="astage container">
-        <div className="answer">
-          الإجابة: <strong>{tile?.answerText || question?.answer}</strong>
-        </div>
+        {showAnswerText && (
+          <div className="answer">
+            الإجابة: <strong>{answerText}</strong>
+          </div>
+        )}
 
-        {answerImgUrl && (
-          <img
-            src={answerImgUrl}
-            alt=""
-            className="aimage"
-            loading="eager"
-            fetchpriority="high"
-            decoding="async"
-          />
+        {/* Answer media (image or video) */}
+        {(aUrl || aPublicId) && (
+          <div style={{ marginTop: 10 }}>
+            {aType === "video" ? (
+              <video
+                src={aUrl}
+                className="aimage"
+                style={{ width: "100%", maxWidth: 900, borderRadius: 14 }}
+                controls
+                playsInline
+              />
+            ) : (
+              <CldImage
+                publicId={aPublicId}
+                url={aUrl}
+                w={900}
+                h={420}
+                alt="answer"
+              />
+            )}
+          </div>
         )}
 
         <div className="assignrow">
