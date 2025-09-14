@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import { doc, onSnapshot, collection, getDocs, getDoc, updateDoc, increment } from "firebase/firestore";
 import "../../styles/game.css";
+import RotateGate from "../../components/RotateGate";
 
 function Timer() {
   const [ms, setMs] = useState(0);
@@ -202,6 +203,7 @@ export default function GameRoom() {
   if (!game) return null;
 
   return (
+     <RotateGate title="لوحة اللعب">
     <div className="gameroom">
       {/* Top bar */}
       <div className="appbar">
@@ -269,5 +271,5 @@ export default function GameRoom() {
         </div>
       </div>
     </div>
-  );
+ </RotateGate> );
 }

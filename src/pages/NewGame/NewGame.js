@@ -14,6 +14,8 @@ import {
   runTransaction, // ⬅️ keep: used below
 } from "firebase/firestore";
 import "../../styles/newgame.css";
+import RotateGate from "../../components/RotateGate";
+
 
 export default function NewGame() {
   const [allCats, setAllCats] = useState([]);
@@ -286,6 +288,7 @@ export default function NewGame() {
   );
 
   return (
+    <RotateGate title="لوحة اللعب">
     <div className="newgame">
       {/* Back button */}
       <button className="btn btn--secondary" onClick={() => nav(-1)} style={{ marginBottom: 12 }}>
@@ -396,5 +399,5 @@ export default function NewGame() {
         </div>
       </div>
     </div>
-  );
+  </RotateGate>);
 }

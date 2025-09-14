@@ -345,3 +345,45 @@
   --brand-1: var(--primary-color);    /* used by ScoreCard + buttons */
   --brand-pill: var(--primary-color); /* used for team pill */
 }
+/* --- Landscape gate / rotate overlay --- */
+.rotate-overlay{
+  position: fixed;
+  inset: 0;
+  background: #0b1224;           /* deep slate */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 99999;
+}
+
+/* Only show overlay in PORTRAIT */
+@media (orientation: landscape){
+  .rotate-overlay{ display: none; }
+}
+
+.rotate-card{
+  width: min(92vw, 520px);
+  background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);
+  border: 2px solid #93c5fd;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(2,6,23,.5);
+  padding: 20px 18px;
+  text-align: center;
+}
+
+.rotate-icon{ font-size: 44px; margin-bottom: 8px; }
+.rotate-title{ margin: 0 0 6px; font-weight: 900; }
+.rotate-text{ margin: 0 0 14px; opacity: .95; }
+
+.rotate-btn{
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 16px;
+  border-radius: 12px; border: 1px solid #1e3a8a;
+  background: #0ea5e9; color: #fff; font-weight: 800; cursor: pointer;
+  box-shadow: 0 10px 24px rgba(14,165,233,.25);
+}
+.rotate-btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+.rotate-note{ margin: 10px 0 0; font-size: 14px; opacity: .9; }
