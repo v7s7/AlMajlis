@@ -2,9 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
-import {
-  doc, onSnapshot, collection, getDocs, getDoc, updateDoc
-} from "firebase/firestore";
+import { doc, onSnapshot, collection, getDocs, getDoc, updateDoc, increment } from "firebase/firestore";
+import "../../styles/game.css";
 
 function Timer() {
   const [ms, setMs] = useState(0);
@@ -189,11 +188,11 @@ export default function GameRoom() {
 
   async function adjustScore(teamKey, delta) {
     const gRef = doc(db, "games", id);
-    const nextA = Math.max(0, (game?.teamAScore || 0) + (teamKey === "A" ? delta : 0));
-    const nextB = Math.max(0, (game?.teamBScore || 0) + (teamKey === "B" ? delta : 0));
     try {
-      await updateDoc(gRef, { teamAScore: nextA, teamBScore: nextB });
-      setGame((old) => ({ ...old, teamAScore: nextA, teamBScore: nextB }));
+      await updateDoc(gRef, {
+        teamAScore: increment(teamKey === "A" ? delta : 0),
+        teamBScore: increment(teamKey === "B" ? delta : 0),
+      });
     } catch (e) {
       alert("تعذّر تعديل النقاط. جرّب مرّة ثانية.");
       console.error(e);
@@ -203,7 +202,7 @@ export default function GameRoom() {
   if (!game) return null;
 
   return (
-    <>
+    <div className="gameroom">
       {/* Top bar */}
       <div className="appbar">
         <div className="appbar__row container">
@@ -233,7 +232,7 @@ export default function GameRoom() {
               </div>
 
               {ROW_VALUES.map((v, rowIdx) => {
-                const t = tileIndex.get(`${colIdx + 1}:${rowIdx + 1}`);
+                const t = tileIndex.get(`${c.position}:${rowIdx + 1}`); // use c.position
                 const opened = t?.opened;
                 return (
                   <button
@@ -269,6 +268,6 @@ export default function GameRoom() {
           />
         </div>
       </div>
-    </>
+    </div>
   );
 }

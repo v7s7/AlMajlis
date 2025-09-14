@@ -293,7 +293,7 @@ export default function NewGame() {
       </button>
 
       <div className="newgame__layout">
-        {/* Left column */}
+        {/* Main column */}
         <div>
           <input
             className="input-search"
@@ -360,10 +360,8 @@ export default function NewGame() {
               </div>
             ))
           )}
-        </div>
 
-        {/* Right column */}
-        <div>
+          {/* Teams panel — moved here so it's always at the bottom */}
           <div className="panel">
             <h3 dir="ltr">Teams</h3>
 
