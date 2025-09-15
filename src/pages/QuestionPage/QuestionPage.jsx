@@ -4,6 +4,7 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { db } from "../../firebase";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import "../../styles/questionpage.css";
+import RotateGate from "../../components/RotateGate"; // ⬅️ added
 
 function useCountUp(autoStart = true) {
   const [ms, setMs] = useState(0);
@@ -154,99 +155,100 @@ export default function QuestionPage() {
   if (!game || !tile || !question) return null;
 
   // Fallback: add .has-image for browsers without :has()
- // ✅ no hooks, so hook order is stable
-const imgSrc = (tile?.questionImageUrl || question?.imageUrl) || "";
-const hasImage = Boolean(imgSrc);
-
+  // ✅ no hooks, so hook order is stable
+  const imgSrc = (tile?.questionImageUrl || question?.imageUrl) || "";
+  const hasImage = Boolean(imgSrc);
 
   return (
-    <div className="qpage qpage--full" dir="rtl">
-      {/* Top gradient bar */}
-      <div className="qbar">
-        <div className="qbar__left">
-          <button className="iconbtn" onClick={() => nav(`/game/${gameId}`)}>
-            ↩︎ الرجوع للوحة
-          </button>
-          <button className="iconbtn" onClick={() => nav(`/game/${gameId}/results`)}>
-            ⟶ انتهاء اللعبة
-          </button>
-          <button className="iconbtn" onClick={() => nav(`/`)}>⎋ الخروج</button>
-        </div>
-        <div className="qbar__center">{categoryName || " "}</div>
-        <div className="qbar__right">
-          <div className="turnchip">
-            دور فريق : <strong>{isATurn ? game.teamAName : game.teamBName}</strong>
+    <RotateGate title="السؤال">
+      <div className="qpage qpage--full" dir="rtl">
+        {/* Top gradient bar */}
+        <div className="qbar">
+          <div className="qbar__left">
+            <button className="iconbtn" onClick={() => nav(`/game/${gameId}`)}>
+              ↩︎ الرجوع للوحة
+            </button>
+            <button className="iconbtn" onClick={() => nav(`/game/${gameId}/results`)}>
+              ⟶ انتهاء اللعبة
+            </button>
+            <button className="iconbtn" onClick={() => nav(`/`)}>⎋ الخروج</button>
+          </div>
+          <div className="qbar__center">{categoryName || " "}</div>
+          <div className="qbar__right">
+            <div className="turnchip">
+              دور فريق : <strong>{isATurn ? game.teamAName : game.teamBName}</strong>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Centered timer pill */}
-      <div className="qtimer container">
-        <button className="qtimer__btn" onClick={timer.reset} aria-label="Reset">
-          ↻
-        </button>
-        <div className="qtimer__time" aria-live="polite" aria-atomic="true">
-          {timer.mm}:{timer.ss}
-        </div>
-        <button
-          className="qtimer__btn"
-          onClick={timer.toggle}
-          aria-label={timer.running ? "Pause" : "Start"}
-        >
-          {timer.running ? "⏸" : "▶"}
-        </button>
-      </div>
-
-      {/* Full-bleed stage */}
-      <div
-        ref={stageRef}
-        className={`qstage qstage--full container${hasImage ? " has-image" : ""}`}
-      >
-        <div className="pointchip">{tile.value ?? 0} نقطة</div>
-        <h1 className="qtext">{tile?.questionText || question?.text}</h1>
-
-        {imgSrc && (
-          <>
-            {/* Clickable image opens CSS lightbox */}
-            <a href={`#zoom-qimage-${tileId}`} className="qzoom">
-              <img
-                src={imgSrc}
-                alt=""
-                className="qimage qimage--big"
-                loading="eager"
-                decoding="async"
-                fetchpriority="high"
-              />
-            </a>
-
-            {/* Lightbox overlay (appears only when targeted) */}
-            <a
-              href="#"
-              id={`zoom-qimage-${tileId}`}
-              className="qimage-lightbox"
-              aria-label="إغلاق الصورة"
-            >
-              <img src={imgSrc} alt="" />
-            </a>
-          </>
-        )}
-
-        {/* bottom actions: go to separate answer page */}
-        <div className="qactions">
+        {/* Centered timer pill */}
+        <div className="qtimer container">
+          <button className="qtimer__btn" onClick={timer.reset} aria-label="Reset">
+            ↻
+          </button>
+          <div className="qtimer__time" aria-live="polite" aria-atomic="true">
+            {timer.mm}:{timer.ss}
+          </div>
           <button
-            className="ansbtn"
-            onClick={() =>
-              nav(`/game/${gameId}/tile/${tileId}/answer`, {
-                state: { game, tile, question, categoryName },
-              })
-            }
+            className="qtimer__btn"
+            onClick={timer.toggle}
+            aria-label={timer.running ? "Pause" : "Start"}
           >
-            الإجابة
+            {timer.running ? "⏸" : "▶"}
           </button>
         </div>
 
-        {categoryName && <div className="cattag">{categoryName}</div>}
+        {/* Full-bleed stage */}
+        <div
+          ref={stageRef}
+          className={`qstage qstage--full container${hasImage ? " has-image" : ""}`}
+        >
+          <div className="pointchip">{tile.value ?? 0} نقطة</div>
+          <h1 className="qtext">{tile?.questionText || question?.text}</h1>
+
+          {imgSrc && (
+            <>
+              {/* Clickable image opens CSS lightbox */}
+              <a href={`#zoom-qimage-${tileId}`} className="qzoom">
+                <img
+                  src={imgSrc}
+                  alt=""
+                  className="qimage qimage--big"
+                  loading="eager"
+                  decoding="async"
+                  fetchpriority="high"
+                />
+              </a>
+
+              {/* Lightbox overlay (appears only when targeted) */}
+              <a
+                href="#"
+                id={`zoom-qimage-${tileId}`}
+                className="qimage-lightbox"
+                aria-label="إغلاق الصورة"
+              >
+                <img src={imgSrc} alt="" />
+              </a>
+            </>
+          )}
+
+          {/* bottom actions: go to separate answer page */}
+          <div className="qactions">
+            <button
+              className="ansbtn"
+              onClick={() =>
+                nav(`/game/${gameId}/tile/${tileId}/answer`, {
+                  state: { game, tile, question, categoryName },
+                })
+              }
+            >
+              الإجابة
+            </button>
+          </div>
+
+          {categoryName && <div className="cattag">{categoryName}</div>}
+        </div>
       </div>
-    </div>
+    </RotateGate>
   );
 }

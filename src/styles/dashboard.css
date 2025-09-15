@@ -1,0 +1,112 @@
+/* src/styles/dashboard.css */
+
+/* ===== Portrait (block background scroll under RotateGate) ===== */
+@media (max-width: 900px) and (orientation: portrait) {
+  html, body { height: 100dvh; overflow: hidden; }
+}
+
+/* ===== iPhone / small screens in LANDSCAPE: full-screen, no scroll ===== */
+@media (max-width: 900px) and (orientation: landscape) {
+  html, body { height: 100dvh; overflow: hidden; }
+
+  /* Root page fills viewport, no scroll */
+  [data-page="dashboard"] {
+    height: 100dvh; width: 100vw; overflow: hidden;
+    display: grid; grid-template-rows: auto 1fr; /* topbar + hero */
+  }
+
+  /* Make the topbar a compact 3-column grid:
+     [Right Nav] [Brand] [User/Chips]  */
+  [data-page="dashboard"] .dash-rightNav,
+  [data-page="dashboard"] .dash-brand,
+  [data-page="dashboard"] .dash-user {
+    min-width: 0; /* allow shrinking */
+  }
+
+  /* The sticky wrapper from inline styles stays;
+     we only tighten the internal layout. */
+  [data-page="dashboard"] .dash-rightNav { 
+    display: flex; align-items: center; justify-content: flex-start;
+    gap: 10px !important; flex-wrap: wrap;
+  }
+
+  /* Nav links smaller to avoid overlap */
+  [data-page="dashboard"] .dash-navLink  { 
+    font-size: 15px !important; font-weight: 800 !important;
+  }
+
+  /* Credits pill a bit tighter */
+  [data-page="dashboard"] .dash-credits {
+    padding: 6px 10px !important; font-size: 12px !important; line-height: 1 !important;
+    border-width: 2px !important;
+  }
+
+  /* Brand stays centered, but don’t let it push */
+  [data-page="dashboard"] .dash-brand {
+    justify-content: center; /* centers "المجلس" */
+  }
+  /* Nudge brand size down slightly */
+  [data-page="dashboard"] .dash-brand * {
+    font-size: 22px !important;
+  }
+
+  /* User block aligned to end, compact spacing */
+  [data-page="dashboard"] .dash-user { gap: 8px !important; justify-content: flex-end; }
+  [data-page="dashboard"] .dash-username { font-size: 16px !important; }
+
+  /* Action chips compact */
+  [data-page="dashboard"] .dash-chips { gap: 8px !important; }
+  [data-page="dashboard"] .dash-chipPrimary,
+  [data-page="dashboard"] .dash-chip {
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    border-width: 2px !important;
+    white-space: nowrap !important;
+  }
+
+  /* HERO fills the rest and centers content */
+  .dash-hero {
+    padding: 22px 12px 26px !important;
+    display: grid; place-items: center;
+  }
+  .dash-heroInner { max-width: 92vw !important; }
+
+  /* Scale down hero title/sub to avoid overflow */
+  .dash-heroTitle { 
+    font-size: clamp(22px, 5vw, 32px) !important; 
+    margin-bottom: 6px !important; line-height: 1.15 !important;
+  }
+  .dash-heroSub   { 
+    font-size: clamp(13px, 2.6vw, 16px) !important; 
+    margin: 4px 0 !important; line-height: 1.35 !important; 
+    text-wrap: balance;
+  }
+
+  /* CTAs stay on one line if possible, otherwise wrap neatly */
+  .dash-ctas { 
+    margin-top: 14px !important; gap: 10px !important; 
+    flex-wrap: wrap !important; justify-content: center !important;
+  }
+  .dash-btnPrimary,
+  .dash-btnGhost {
+    padding: 10px 16px !important;
+    font-size: clamp(13px, 2.4vw, 15px) !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ===== Extra guard for very squat landscape (e.g., 844×390) ===== */
+@media (max-width: 740px) and (max-height: 420px) and (orientation: landscape) {
+  [data-page="dashboard"] .dash-navLink { font-size: 14px !important; }
+  [data-page="dashboard"] .dash-credits { font-size: 11px !important; padding: 5px 8px !important; }
+  .dash-hero { padding: 18px 10px 22px !important; }
+  .dash-heroTitle { font-size: clamp(20px, 4.6vw, 28px) !important; }
+  .dash-heroSub { font-size: clamp(12px, 2.2vw, 15px) !important; }
+  .dash-btnPrimary, .dash-btnGhost { padding: 9px 14px !important; }
+}
+
+/* Prefer dvh where supported */
+@supports (height: 100dvh) {
+  html, body, [data-page="dashboard"] { height: 100dvh; }
+}

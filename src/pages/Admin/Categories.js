@@ -39,8 +39,9 @@ export default function Categories() {
     "مسلسلات",
     "البحرين",
         "سيارات",
-
-    
+        "رياضة",
+        "انمي",
+        "ذكاء",
   ];
   const [ctype, setCtype] = useState("");        // for add form
   const [editType, setEditType] = useState("");  // for edit form
