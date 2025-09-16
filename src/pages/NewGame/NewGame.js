@@ -14,6 +14,7 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import "../../styles/newgame.css";
+import "../../styles/warn-modal.css"; // <-- NEW: modal styles
 import RotateGate from "../../components/RotateGate";
 
 export default function NewGame() {
@@ -157,16 +158,6 @@ export default function NewGame() {
     );
   }
 
-  function sampleK(arr, k) {
-    const a = [...arr];
-    if (a.length < k) throw new Error(`Not enough items to sample ${k}`);
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a.slice(0, k);
-  }
-
   // Determine if this user has any prior games (first = FREE)
   async function isFirstGameForUser(uid) {
     const snap = await getDocs(
@@ -177,12 +168,9 @@ export default function NewGame() {
 
   // Load set of questionIds the user has actually OPENED before (seen)
   async function loadUserSeenQuestionIds(uid) {
-    // Read all games by this user (ids only)
     const gSnap = await getDocs(query(collection(db, "games"), where("hostUserId", "==", uid)));
     const gameIds = gSnap.docs.map(d => d.id);
     const seen = new Set();
-    // For each game, read game_tiles opened == true (only opened count as seen)
-    // Note: bounded by number of games; fine for admin/paid logic.
     for (const gid of gameIds) {
       const tilesRef = collection(doc(db, "games", gid), "game_tiles");
       const tSnap = await getDocs(query(tilesRef, where("opened", "==", true)));
@@ -195,7 +183,6 @@ export default function NewGame() {
   }
 
   async function validateStockParallel(categoryIds) {
-    // Build ALL tiny stock-check queries, run in parallel
     const checks = [];
     for (const id of categoryIds) {
       for (const v of VALUES) {
@@ -214,6 +201,78 @@ export default function NewGame() {
     return { ok: true };
   }
 
+  // ---------- Modal state ----------
+  const [warnOpen, setWarnOpen] = useState(false);
+  const [warnLines, setWarnLines] = useState([]); // string[]
+  const pendingRef = useRef(null); // { perCategoryPicks, freeMode }
+
+  // ---------- Centralized game creation ----------
+  async function createGame(perCategoryPicks, freeMode) {
+    const userRef = doc(db, "users", user.uid);
+    let newGameId = null;
+
+    await runTransaction(db, async (trx) => {
+      // a) Check & decrement credits
+      const us = await trx.get(userRef);
+      const current = us.exists() ? Number(us.data()?.gamesRemaining ?? 0) : 0;
+      if (!Number.isFinite(current) || current < 1) {
+        throw new Error("لا توجد ألعاب متبقية في رصيدك.");
+      }
+      trx.update(userRef, { gamesRemaining: current - 1 });
+
+      // b) Create game and children
+      const gameRef = doc(collection(db, "games"));
+      newGameId = gameRef.id;
+
+      const isFreeNow = await isFirstGameForUser(user.uid); // harmless re-check
+
+      trx.set(gameRef, {
+        hostUserId: user.uid,
+        status: "active",
+        teamAName: teamA.trim(),
+        teamBName: teamB.trim(),
+        teamAScore: 0,
+        teamBScore: 0,
+        turn: "A",
+        startedAt: serverTimestamp(),
+        endedAt: null,
+        mode: (freeMode || isFreeNow) ? "free" : "paid",
+      });
+
+      // game_categories
+      const gcCol = collection(gameRef, "game_categories");
+      sel.forEach((categoryId, i) => {
+        trx.set(doc(gcCol), { position: i + 1, categoryId });
+      });
+
+      // game_tiles
+      const tilesCol = collection(gameRef, "game_tiles");
+      for (let catPos = 0; catPos < perCategoryPicks.length; catPos++) {
+        const { buckets } = perCategoryPicks[catPos];
+        for (let row = 0; row < SEQUENCE.length; row++) {
+          const { value, index } = SEQUENCE[row];
+          const qpick = buckets.get(value)[index];
+          trx.set(doc(tilesCol), {
+            categoryPosition: catPos + 1,
+            rowIndex: row + 1,
+            value,
+            opened: false,
+            questionId: qpick.id,
+            answeredBy: null,
+            correct: null,
+            questionText: qpick.text || "",
+            answerText: qpick.answer || "",
+            questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
+            answerImageUrl: qpick.answerImageUrl || "",
+          });
+        }
+      }
+    });
+
+    if (newGameId) nav(`/game/${newGameId}`);
+  }
+
+  // ---------- Start flow ----------
   async function start() {
     if (!user?.uid) return alert("You must be signed in.");
     if (sel.length < 1) return alert("Pick at least 1 category (up to 6).");
@@ -222,28 +281,24 @@ export default function NewGame() {
     setBusy(true);
     console.time?.("newgame:start");
     try {
-      // FREE if this is the user's first-ever game
       const freeMode = await isFirstGameForUser(user.uid);
 
-      // 1) Fast stock check (all in parallel)
+      // 1) Stock check
       const check = await validateStockParallel(sel);
       if (!check.ok) {
         alert(check.message);
-        return; // finally will reset busy
+        setBusy(false);
+        return;
       }
 
-      // 2) Fetch candidates for ALL (category,value) in parallel
+      // 2) Fetch candidates
       const jobs = [];
       for (const categoryId of sel) {
         for (const v of VALUES) {
-          jobs.push({
-            categoryId,
-            v,
-            promise: getDocs(pickQuery(categoryId, v)),
-          });
+          jobs.push({ categoryId, v, promise: getDocs(pickQuery(categoryId, v)) });
         }
       }
-      const picksMap = new Map(); // key: `${categoryId}:${v}` -> questions[]
+      const picksMap = new Map();
       const snaps = await Promise.all(jobs.map((j) => j.promise));
       for (let i = 0; i < jobs.length; i++) {
         const { categoryId, v } = jobs[i];
@@ -251,17 +306,14 @@ export default function NewGame() {
         if (docs.length < 2) {
           throw new Error(`Not enough questions after validation for category ${categoryId}, value ${v}.`);
         }
-        // FREE: deterministically pick the first two by createdAt (oldest), then id
-        if (freeMode) {
-          docs = docs.sort(cmpCreatedThenId);
-        }
+        if (freeMode) docs = docs.sort(cmpCreatedThenId);
         picksMap.set(`${categoryId}:${v}`, docs);
       }
 
       // 3) Compose perCategoryPicks
-      const perCategoryPicks = [];
       if (freeMode) {
-        // FREE: fixed two (oldest) per bucket
+        // FREE: deterministic oldest 2
+        const perCategoryPicks = [];
         for (let catPos = 0; catPos < sel.length; catPos++) {
           const categoryId = sel[catPos];
           const buckets = new Map();
@@ -271,141 +323,65 @@ export default function NewGame() {
           }
           perCategoryPicks.push({ categoryId, buckets });
         }
-      } else {
-        // PAID: avoid repeats using user's seen set; warn if repeats are needed
-        const seenSet = await loadUserSeenQuestionIds(user.uid);
-
-        // Pre-calc deficits per category/value for warning
-        const warnLines = [];
-        for (const categoryId of sel) {
-          let totalDeficit = 0;
-          const name = allCats.find(c => c.id === categoryId)?.name || categoryId;
-          const parts = [];
-          for (const v of VALUES) {
-            const all = picksMap.get(`${categoryId}:${v}`) || [];
-            const unseen = all.filter(q => !seenSet.has(q.id));
-            const deficit = Math.max(0, 2 - unseen.length);
-            if (deficit > 0) {
-              parts.push(`${v}: need ${deficit} from used`);
-              totalDeficit += deficit;
-            }
-          }
-          if (totalDeficit > 0) {
-            warnLines.push(`• ${name} → ${parts.join(", ")}`);
-          }
-        }
-
-        if (warnLines.length > 0) {
-          const msg =
-            "تنبيه: ستتضمن بعض الأسئلة أسئلة رأيتها سابقًا بسبب قلة الأسئلة الجديدة في بعض الفئات/القيم:\n\n" +
-            warnLines.join("\n") +
-            "\n\nهل تريد المتابعة؟";
-          const ok = window.confirm(msg);
-          if (!ok) {
-            setBusy(false);
-            return;
-          }
-        }
-
-        // Now actually pick: unseen first, then fill from seen (no duplicates within the same game)
-        for (let catPos = 0; catPos < sel.length; catPos++) {
-          const categoryId = sel[catPos];
-          const buckets = new Map();
-          for (const v of VALUES) {
-            const all = picksMap.get(`${categoryId}:${v}`) || [];
-            const unseen = all.filter(q => !seenSet.has(q.id));
-            const seen = all.filter(q => seenSet.has(q.id));
-
-            const chosen = [];
-            // shuffle unseen to randomize
-            const u = shuffle(unseen);
-            for (const q of u) {
-              if (chosen.length < 2) chosen.push(q);
-              else break;
-            }
-            if (chosen.length < 2) {
-              // fill from seen (also shuffled)
-              const s = shuffle(seen);
-              for (const q of s) {
-                // avoid same q twice within the same bucket
-                if (!chosen.find(x => x.id === q.id)) chosen.push(q);
-                if (chosen.length === 2) break;
-              }
-            }
-            // Safety: we should always have 2 due to earlier stock check
-            buckets.set(v, chosen.slice(0, 2));
-          }
-          perCategoryPicks.push({ categoryId, buckets });
-        }
+        await createGame(perCategoryPicks, true);
+        return;
       }
 
-      // 4) Single atomic TRANSACTION (decrement credit + create game)
-      const userRef = doc(db, "users", user.uid);
-      let newGameId = null;
+      // PAID: unseen-first with warning
+      const seenSet = await loadUserSeenQuestionIds(user.uid);
 
-      await runTransaction(db, async (trx) => {
-        // a) Check & decrement credits
-        const us = await trx.get(userRef);
-        const current = us.exists() ? Number(us.data()?.gamesRemaining ?? 0) : 0;
-        if (!Number.isFinite(current) || current < 1) {
-          throw new Error("لا توجد ألعاب متبقية في رصيدك.");
-        }
-        trx.update(userRef, { gamesRemaining: current - 1 });
-
-        // b) Create game and children
-        const gameRef = doc(collection(db, "games"));
-        newGameId = gameRef.id;
-
-        trx.set(gameRef, {
-          hostUserId: user.uid,
-          status: "active",
-          teamAName: teamA.trim(),
-          teamBName: teamB.trim(),
-          teamAScore: 0,
-          teamBScore: 0,
-          turn: "A",
-          startedAt: serverTimestamp(),
-          endedAt: null,
-          mode: (await isFirstGameForUser(user.uid)) ? "free" : "paid", // metadata (re-check harmless)
-        });
-
-        // game_categories
-        const gcCol = collection(gameRef, "game_categories");
-        sel.forEach((categoryId, i) => {
-          trx.set(doc(gcCol), { position: i + 1, categoryId });
-        });
-
-        // game_tiles
-        const tilesCol = collection(gameRef, "game_tiles");
-        for (let catPos = 0; catPos < perCategoryPicks.length; catPos++) {
-          const { buckets } = perCategoryPicks[catPos];
-          for (let row = 0; row < SEQUENCE.length; row++) {
-            const { value, index } = SEQUENCE[row];
-            const qpick = buckets.get(value)[index];
-            trx.set(doc(tilesCol), {
-              categoryPosition: catPos + 1,
-              rowIndex: row + 1,
-              value,
-              opened: false,
-              questionId: qpick.id,
-              answeredBy: null,
-              correct: null,
-              questionText: qpick.text || "",
-              answerText: qpick.answer || "",
-              questionImageUrl: qpick.questionImageUrl || qpick.imageUrl || "",
-              answerImageUrl: qpick.answerImageUrl || "",
-            });
+      // Build warning lines
+      const warn = [];
+      for (const categoryId of sel) {
+        let totalDeficit = 0;
+        const name = allCats.find(c => c.id === categoryId)?.name || categoryId;
+        const parts = [];
+        for (const v of VALUES) {
+          const all = picksMap.get(`${categoryId}:${v}`) || [];
+          const unseen = all.filter(q => !seenSet.has(q.id));
+          const deficit = Math.max(0, 2 - unseen.length);
+          if (deficit > 0) {
+            parts.push(`${v}: ${deficit} من أسئلة مستخدمة`);
+            totalDeficit += deficit;
           }
         }
-      });
+        if (totalDeficit > 0) warn.push(`• ${name} → ${parts.join("، ")}`);
+      }
 
-      console.timeEnd?.("newgame:start");
-      if (newGameId) nav(`/game/${newGameId}`);
+      // Prepare picks (unseen then seen), store in ref if warning needed
+      const perCategoryPicks = [];
+      for (let catPos = 0; catPos < sel.length; catPos++) {
+        const categoryId = sel[catPos];
+        const buckets = new Map();
+        for (const v of VALUES) {
+          const all = picksMap.get(`${categoryId}:${v}`) || [];
+          const unseen = shuffle(all.filter(q => !seenSet.has(q.id)));
+          const seen = shuffle(all.filter(q => seenSet.has(q.id)));
+          const chosen = [];
+          for (const q of unseen) { if (chosen.length < 2) chosen.push(q); else break; }
+          for (const q of seen) { if (chosen.length < 2 && !chosen.find(x => x.id === q.id)) chosen.push(q); }
+          buckets.set(v, chosen.slice(0, 2));
+        }
+        perCategoryPicks.push({ categoryId, buckets });
+      }
+
+      if (warn.length > 0) {
+        setWarnLines(warn);
+        pendingRef.current = { perCategoryPicks, freeMode: false };
+        setWarnOpen(true);   // show styled modal
+        setBusy(false);      // release UI while modal shown
+        return;
+      }
+
+      // No warning → proceed immediately
+      await createGame(perCategoryPicks, false);
     } catch (e) {
       console.error(e);
       alert(e?.message || "Failed to start game. Please try again.");
     } finally {
-      setBusy(false);
+      // if modal is open, busy is already false
+      if (!warnOpen) setBusy(false);
+      console.timeEnd?.("newgame:start");
     }
   }
 
@@ -491,7 +467,7 @@ export default function NewGame() {
               ))
             )}
 
-            {/* Teams panel — moved here so it's always at the bottom */}
+            {/* Teams panel */}
             <div className="panel">
               <h3 dir="ltr">Teams</h3>
 
@@ -519,13 +495,60 @@ export default function NewGame() {
 
               {!user?.uid && (
                 <div className="mt-8" style={{ color: "#ef4444", fontWeight: 700 }}>
-                Sign in to start a game.
+                  Sign in to start a game.
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Styled warning modal */}
+      {warnOpen && (
+        <div className="wm-overlay" role="dialog" aria-modal="true" aria-labelledby="wm-title">
+          <div className="wm-card">
+            <h3 id="wm-title" className="wm-title">تنبيه التكرار</h3>
+            <p className="wm-text">
+              ستتضمن بعض الأسئلة أسئلة رأيتها سابقًا بسبب قلة الأسئلة الجديدة في بعض الفئات/القيم:
+            </p>
+            <div className="wm-listwrap">
+              <ul className="wm-list">
+                {warnLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="wm-actions">
+              <button
+                className="btn btn--secondary"
+                onClick={() => { setWarnOpen(false); pendingRef.current = null; }}
+              >
+                إلغاء
+              </button>
+              <button
+                className="btn"
+                onClick={async () => {
+                  const pending = pendingRef.current;
+                  if (!pending) { setWarnOpen(false); return; }
+                  setWarnOpen(false);
+                  setBusy(true);
+                  try {
+                    await createGame(pending.perCategoryPicks, pending.freeMode);
+                  } catch (e) {
+                    console.error(e);
+                    alert(e?.message || "Failed to start game. Please try again.");
+                  } finally {
+                    setBusy(false);
+                    pendingRef.current = null;
+                  }
+                }}
+              >
+                ابدأ على أي حال
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RotateGate>
   );
 }

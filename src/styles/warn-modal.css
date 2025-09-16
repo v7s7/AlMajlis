@@ -1,0 +1,62 @@
+/* Overlay */
+.wm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+/* Card */
+.wm-card {
+  width: min(520px, 92vw);
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid var(--border, #e5e7eb);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  padding: 20px;
+  direction: rtl;
+}
+
+/* Title & body */
+.wm-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-color, #0f172a);
+}
+
+.wm-text {
+  margin-top: 10px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+/* List area */
+.wm-listwrap {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.wm-list {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.wm-list li {
+  margin: 6px 0;
+}
+
+/* Actions */
+.wm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
