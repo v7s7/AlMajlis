@@ -11,11 +11,10 @@ import {
   serverTimestamp,
   where,
   limit,
-  runTransaction, // ⬅️ keep: used below
+  runTransaction,
 } from "firebase/firestore";
 import "../../styles/newgame.css";
 import RotateGate from "../../components/RotateGate";
-
 
 export default function NewGame() {
   const [allCats, setAllCats] = useState([]);
@@ -111,6 +110,31 @@ export default function NewGame() {
     { value: 600, index: 1 },
   ];
 
+  // Compare by createdAt (oldest first), then by id for stability
+  function toMillis(ts) {
+    if (!ts) return 0;
+    if (typeof ts.toMillis === "function") return ts.toMillis();
+    if (typeof ts === "number") return ts;
+    const d = Date.parse(ts);
+    return Number.isFinite(d) ? d : 0;
+  }
+  function cmpCreatedThenId(a, b) {
+    const da = toMillis(a.createdAt);
+    const db = toMillis(b.createdAt);
+    if (da !== db) return da - db; // oldest first
+    return String(a.id).localeCompare(String(b.id));
+  }
+
+  // Shuffle (Fisher–Yates)
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
   // Small, fast query (only check if >=2 exist)
   function stockQuery(categoryId, value) {
     return query(
@@ -122,14 +146,14 @@ export default function NewGame() {
     );
   }
 
-  // We only need 2; pull at most 10 to keep reads quick (and still randomize)
+  // Pull up to 25 to give unseen-filter room
   function pickQuery(categoryId, value) {
     return query(
       collection(db, "questions"),
       where("categoryId", "==", categoryId),
       where("value", "==", value),
       where("isActive", "==", true),
-      limit(10)
+      limit(25)
     );
   }
 
@@ -141,6 +165,33 @@ export default function NewGame() {
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a.slice(0, k);
+  }
+
+  // Determine if this user has any prior games (first = FREE)
+  async function isFirstGameForUser(uid) {
+    const snap = await getDocs(
+      query(collection(db, "games"), where("hostUserId", "==", uid), limit(1))
+    );
+    return snap.size === 0;
+  }
+
+  // Load set of questionIds the user has actually OPENED before (seen)
+  async function loadUserSeenQuestionIds(uid) {
+    // Read all games by this user (ids only)
+    const gSnap = await getDocs(query(collection(db, "games"), where("hostUserId", "==", uid)));
+    const gameIds = gSnap.docs.map(d => d.id);
+    const seen = new Set();
+    // For each game, read game_tiles opened == true (only opened count as seen)
+    // Note: bounded by number of games; fine for admin/paid logic.
+    for (const gid of gameIds) {
+      const tilesRef = collection(doc(db, "games", gid), "game_tiles");
+      const tSnap = await getDocs(query(tilesRef, where("opened", "==", true)));
+      tSnap.forEach(t => {
+        const qid = t.data()?.questionId;
+        if (qid) seen.add(qid);
+      });
+    }
+    return seen;
   }
 
   async function validateStockParallel(categoryIds) {
@@ -171,6 +222,9 @@ export default function NewGame() {
     setBusy(true);
     console.time?.("newgame:start");
     try {
+      // FREE if this is the user's first-ever game
+      const freeMode = await isFirstGameForUser(user.uid);
+
       // 1) Fast stock check (all in parallel)
       const check = await validateStockParallel(sel);
       if (!check.ok) {
@@ -178,7 +232,7 @@ export default function NewGame() {
         return; // finally will reset busy
       }
 
-      // 2) Fetch candidates for ALL (category,value) in parallel, limited to 10
+      // 2) Fetch candidates for ALL (category,value) in parallel
       const jobs = [];
       for (const categoryId of sel) {
         for (const v of VALUES) {
@@ -193,23 +247,96 @@ export default function NewGame() {
       const snaps = await Promise.all(jobs.map((j) => j.promise));
       for (let i = 0; i < jobs.length; i++) {
         const { categoryId, v } = jobs[i];
-        const docs = snaps[i].docs.map((d) => ({ id: d.id, ...d.data() }));
+        let docs = snaps[i].docs.map((d) => ({ id: d.id, ...d.data() }));
         if (docs.length < 2) {
           throw new Error(`Not enough questions after validation for category ${categoryId}, value ${v}.`);
+        }
+        // FREE: deterministically pick the first two by createdAt (oldest), then id
+        if (freeMode) {
+          docs = docs.sort(cmpCreatedThenId);
         }
         picksMap.set(`${categoryId}:${v}`, docs);
       }
 
-      // 3) Compose perCategoryPicks by sampling locally
+      // 3) Compose perCategoryPicks
       const perCategoryPicks = [];
-      for (let catPos = 0; catPos < sel.length; catPos++) {
-        const categoryId = sel[catPos];
-        const buckets = new Map();
-        for (const v of VALUES) {
-          const all = picksMap.get(`${categoryId}:${v}`) || [];
-          buckets.set(v, sampleK(all, 2));
+      if (freeMode) {
+        // FREE: fixed two (oldest) per bucket
+        for (let catPos = 0; catPos < sel.length; catPos++) {
+          const categoryId = sel[catPos];
+          const buckets = new Map();
+          for (const v of VALUES) {
+            const all = picksMap.get(`${categoryId}:${v}`) || [];
+            buckets.set(v, all.slice(0, 2));
+          }
+          perCategoryPicks.push({ categoryId, buckets });
         }
-        perCategoryPicks.push({ categoryId, buckets });
+      } else {
+        // PAID: avoid repeats using user's seen set; warn if repeats are needed
+        const seenSet = await loadUserSeenQuestionIds(user.uid);
+
+        // Pre-calc deficits per category/value for warning
+        const warnLines = [];
+        for (const categoryId of sel) {
+          let totalDeficit = 0;
+          const name = allCats.find(c => c.id === categoryId)?.name || categoryId;
+          const parts = [];
+          for (const v of VALUES) {
+            const all = picksMap.get(`${categoryId}:${v}`) || [];
+            const unseen = all.filter(q => !seenSet.has(q.id));
+            const deficit = Math.max(0, 2 - unseen.length);
+            if (deficit > 0) {
+              parts.push(`${v}: need ${deficit} from used`);
+              totalDeficit += deficit;
+            }
+          }
+          if (totalDeficit > 0) {
+            warnLines.push(`• ${name} → ${parts.join(", ")}`);
+          }
+        }
+
+        if (warnLines.length > 0) {
+          const msg =
+            "تنبيه: ستتضمن بعض الأسئلة أسئلة رأيتها سابقًا بسبب قلة الأسئلة الجديدة في بعض الفئات/القيم:\n\n" +
+            warnLines.join("\n") +
+            "\n\nهل تريد المتابعة؟";
+          const ok = window.confirm(msg);
+          if (!ok) {
+            setBusy(false);
+            return;
+          }
+        }
+
+        // Now actually pick: unseen first, then fill from seen (no duplicates within the same game)
+        for (let catPos = 0; catPos < sel.length; catPos++) {
+          const categoryId = sel[catPos];
+          const buckets = new Map();
+          for (const v of VALUES) {
+            const all = picksMap.get(`${categoryId}:${v}`) || [];
+            const unseen = all.filter(q => !seenSet.has(q.id));
+            const seen = all.filter(q => seenSet.has(q.id));
+
+            const chosen = [];
+            // shuffle unseen to randomize
+            const u = shuffle(unseen);
+            for (const q of u) {
+              if (chosen.length < 2) chosen.push(q);
+              else break;
+            }
+            if (chosen.length < 2) {
+              // fill from seen (also shuffled)
+              const s = shuffle(seen);
+              for (const q of s) {
+                // avoid same q twice within the same bucket
+                if (!chosen.find(x => x.id === q.id)) chosen.push(q);
+                if (chosen.length === 2) break;
+              }
+            }
+            // Safety: we should always have 2 due to earlier stock check
+            buckets.set(v, chosen.slice(0, 2));
+          }
+          perCategoryPicks.push({ categoryId, buckets });
+        }
       }
 
       // 4) Single atomic TRANSACTION (decrement credit + create game)
@@ -239,6 +366,7 @@ export default function NewGame() {
           turn: "A",
           startedAt: serverTimestamp(),
           endedAt: null,
+          mode: (await isFirstGameForUser(user.uid)) ? "free" : "paid", // metadata (re-check harmless)
         });
 
         // game_categories
@@ -276,7 +404,6 @@ export default function NewGame() {
     } catch (e) {
       console.error(e);
       alert(e?.message || "Failed to start game. Please try again.");
-      return; // finally will reset busy
     } finally {
       setBusy(false);
     }
@@ -289,115 +416,116 @@ export default function NewGame() {
 
   return (
     <RotateGate title="لوحة اللعب">
-    <div className="newgame">
-      {/* Back button */}
-      <button className="btn btn--secondary" onClick={() => nav(-1)} style={{ marginBottom: 12 }}>
-        ← Back
-      </button>
+      <div className="newgame">
+        {/* Back button */}
+        <button className="btn btn--secondary" onClick={() => nav(-1)} style={{ marginBottom: 12 }}>
+          ← Back
+        </button>
 
-      <div className="newgame__layout">
-        {/* Main column */}
-        <div>
-          <input
-            className="input-search"
-            placeholder="Search categories…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search categories"
-          />
+        <div className="newgame__layout">
+          {/* Main column */}
+          <div>
+            <input
+              className="input-search"
+              placeholder="Search categories…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search categories"
+            />
 
-          <div className="mt-12" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ minWidth: 120, fontWeight: 700 }}>
-              Selected: {sel.length} / 6
-            </div>
-          </div>
-
-          {sel.length > 0 && (
-            <div className="mt-8" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {selectedNames.map((n, i) => (
-                <button
-                  key={sel[i]}
-                  onClick={() => toggle(sel[i])}
-                  className="chip chip--selected"
-                  title="Remove"
-                >
-                  {n} ✕
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Grouped sections by type */}
-          {grouped.length === 0 && !catsLoading ? (
-            <div className="mt-12" style={{ color: "#6b7280" }}>
-              لا توجد فئات مطابقة لبحثك.
-            </div>
-          ) : (
-            grouped.map(([typeName, list]) => (
-              <div key={typeName} className="section mt-16">
-                <div className="section__title">
-                  <span>{typeName}</span>
-                </div>
-                <div className="category-grid">
-                  {list.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => toggle(c.id)}
-                      className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
-                      title={c.name}
-                      disabled={busy}
-                    >
-                      {c.imageUrl ? (
-                        <img
-                          alt=""
-                          src={c.imageUrl}
-                          className="category-card__image"
-                          loading="lazy"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      ) : null}
-                      <div className="category-card__footer">{c.name}</div>
-                    </button>
-                  ))}
-                </div>
+            <div className="mt-12" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ minWidth: 120, fontWeight: 700 }}>
+                Selected: {sel.length} / 6
               </div>
-            ))
-          )}
+            </div>
 
-          {/* Teams panel — moved here so it's always at the bottom */}
-          <div className="panel">
-            <h3 dir="ltr">Teams</h3>
-
-            <input
-              className="auth-input mt-8"
-              value={teamA}
-              onChange={(e) => setTeamA(e.target.value)}
-              placeholder="Team A"
-              dir="ltr"
-              disabled={busy}
-            />
-
-            <input
-              className="auth-input mt-8"
-              value={teamB}
-              onChange={(e) => setTeamB(e.target.value)}
-              placeholder="Team B"
-              dir="ltr"
-              disabled={busy}
-            />
-
-            <button className="btn mt-12" onClick={start} disabled={!canStart}>
-              {busy ? "Starting…" : "Start Game"}
-            </button>
-
-            {!user?.uid && (
-              <div className="mt-8" style={{ color: "#ef4444", fontWeight: 700 }}>
-                Sign in to start a game.
+            {sel.length > 0 && (
+              <div className="mt-8" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {selectedNames.map((n, i) => (
+                  <button
+                    key={sel[i]}
+                    onClick={() => toggle(sel[i])}
+                    className="chip chip--selected"
+                    title="Remove"
+                  >
+                    {n} ✕
+                  </button>
+                ))}
               </div>
             )}
+
+            {/* Grouped sections by type */}
+            {grouped.length === 0 && !catsLoading ? (
+              <div className="mt-12" style={{ color: "#6b7280" }}>
+                لا توجد فئات مطابقة لبحثك.
+              </div>
+            ) : (
+              grouped.map(([typeName, list]) => (
+                <div key={typeName} className="section mt-16">
+                  <div className="section__title">
+                    <span>{typeName}</span>
+                  </div>
+                  <div className="category-grid">
+                    {list.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => toggle(c.id)}
+                        className={`category-card ${sel.includes(c.id) ? "is-selected" : ""}`}
+                        title={c.name}
+                        disabled={busy}
+                      >
+                        {c.imageUrl ? (
+                          <img
+                            alt=""
+                            src={c.imageUrl}
+                            className="category-card__image"
+                            loading="lazy"
+                            onError={(e) => { e.currentTarget.style.display = "none"; }}
+                          />
+                        ) : null}
+                        <div className="category-card__footer">{c.name}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+
+            {/* Teams panel — moved here so it's always at the bottom */}
+            <div className="panel">
+              <h3 dir="ltr">Teams</h3>
+
+              <input
+                className="auth-input mt-8"
+                value={teamA}
+                onChange={(e) => setTeamA(e.target.value)}
+                placeholder="Team A"
+                dir="ltr"
+                disabled={busy}
+              />
+
+              <input
+                className="auth-input mt-8"
+                value={teamB}
+                onChange={(e) => setTeamB(e.target.value)}
+                placeholder="Team B"
+                dir="ltr"
+                disabled={busy}
+              />
+
+              <button className="btn mt-12" onClick={start} disabled={!canStart}>
+                {busy ? "Starting…" : "Start Game"}
+              </button>
+
+              {!user?.uid && (
+                <div className="mt-8" style={{ color: "#ef4444", fontWeight: 700 }}>
+                Sign in to start a game.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </RotateGate>);
+    </RotateGate>
+  );
 }
