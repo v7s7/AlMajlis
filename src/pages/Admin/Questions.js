@@ -1,5 +1,5 @@
 // src/pages/Admin/Questions.jsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../../firebase";
 import {
@@ -43,14 +43,31 @@ export default function Questions() {
   const [editValues, setEditValues] = useState({});
   const nav = useNavigate();
 
+  // ADD: category totals
+  const [catCounts, setCatCounts] = useState({});
+
+  const refreshCatCounts = useCallback(async () => {
+    // Fetch all questions once, then reduce to counts per category
+    const snap = await getDocs(collection(db, "questions"));
+    const counts = {};
+    snap.docs.forEach(d => {
+      const cid = d.data().categoryId;
+      if (!cid) return;
+      counts[cid] = (counts[cid] || 0) + 1;
+    });
+    setCatCounts(counts);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const snap = await getDocs(query(collection(db, "categories"), orderBy("name")));
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setCats(list);
       if (list[0]) setCategoryId(prev => prev || list[0].id);
+      // ADD: compute category totals when categories first load
+      await refreshCatCounts();
     })();
-  }, []);
+  }, [refreshCatCounts]);
 
   // Infer media type from a File or a URL (fallback)
   function inferMediaTypeFromFile(file) {
@@ -83,6 +100,26 @@ export default function Questions() {
     if (!categoryId) return;
     refresh();
   }, [categoryId, refresh]);
+
+  // ======== COUNTS (memoized) ========
+  // Rows for the chosen category
+  const filteredRows = useMemo(
+    () => rows.filter(r => !categoryId || r.categoryId === categoryId),
+    [rows, categoryId]
+  );
+
+  // Per-value counts (200/400/600) + total
+  const valueCounts = useMemo(() => {
+    const counts = { 200: 0, 400: 0, 600: 0 };
+    for (const r of filteredRows) {
+      const v = Number(r.value);
+      if (counts[v] == null) counts[v] = 0; // safety for unexpected values
+      counts[v] += 1;
+    }
+    return counts;
+  }, [filteredRows]);
+
+  const totalCount = filteredRows.length;
 
   async function add() {
     if (role !== "admin") return alert("Not authorized.");
@@ -146,6 +183,8 @@ export default function Questions() {
       setAMediaType("image");
 
       await refresh();
+      // ADD: update category totals after add
+      await refreshCatCounts();
     } catch (e) {
       console.error(e);
       alert("Add failed: " + e.message);
@@ -161,6 +200,8 @@ export default function Questions() {
     try {
       await deleteDoc(doc(db, "questions", id));
       await refresh();
+      // ADD: update category totals after delete
+      await refreshCatCounts();
     } catch (e) {
       console.error(e);
       alert("Delete failed: " + e.message);
@@ -216,6 +257,8 @@ export default function Questions() {
       setEditingId(null);
       setEditValues({});
       await refresh();
+      // ADD: update category totals after possible category change
+      await refreshCatCounts();
     } catch (e) {
       console.error(e);
       alert("Update failed: " + e.message);
@@ -225,6 +268,9 @@ export default function Questions() {
   }
 
   if (role !== "admin") return <div style={{ padding: 16 }}>Not authorized.</div>;
+
+  // Prepare a map to track per-value index while rendering
+  const seenIndex = { 200: 0, 400: 0, 600: 0 };
 
   return (
     <div className="qs" style={{ maxWidth: 1100, margin: "20px auto", padding: 16 }}>
@@ -240,7 +286,9 @@ export default function Questions() {
             style={{ width: "100%", marginBottom: 8 }}
           >
             {cats.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>
+                {c.name} ({catCounts[c.id] || 0})
+              </option>
             ))}
           </select>
 
@@ -249,9 +297,9 @@ export default function Questions() {
             onChange={e => setValue(e.target.value)}
             style={{ width: "100%", marginBottom: 8 }}
           >
-            <option value="200">200</option>
-            <option value="400">400</option>
-            <option value="600">600</option>
+            <option value="200">200 ({valueCounts[200] || 0})</option>
+            <option value="400">400 ({valueCounts[400] || 0})</option>
+            <option value="600">600 ({valueCounts[600] || 0})</option>
           </select>
 
           <input
@@ -329,170 +377,201 @@ export default function Questions() {
 
         {/* Questions list */}
         <div>
+          {/* Summary bar with totals */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+              marginBottom: 10,
+              padding: "8px 10px",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              background: "#fafafa"
+            }}
+          >
+            <span style={{ fontWeight: 700 }}>Total:</span>
+            <span>{totalCount}</span>
+            <span style={{ opacity: 0.5 }}>|</span>
+            <span>200 = {valueCounts[200] || 0}</span>
+            <span>400 = {valueCounts[400] || 0}</span>
+            <span>600 = {valueCounts[600] || 0}</span>
+          </div>
+
           <div style={{ display: "grid", gap: 10 }}>
-            {rows
-              .filter(r => !categoryId || r.categoryId === categoryId)
+            {filteredRows
               .sort((a, b) => a.value - b.value)
-              .map(r =>
-                editingId === r.id ? (
-                  <div key={r.id} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 10 }}>
-                    <select
-                      value={editValues.categoryId}
-                      onChange={e => setEditValues({ ...editValues, categoryId: e.target.value })}
-                      style={{ width: "100%", marginBottom: 6 }}
-                    >
-                      {cats.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={editValues.value}
-                      onChange={e => setEditValues({ ...editValues, value: e.target.value })}
-                      style={{ width: "100%", marginBottom: 6 }}
-                    >
-                      <option value="200">200</option>
-                      <option value="400">400</option>
-                      <option value="600">600</option>
-                    </select>
-                    <input
-                      value={editValues.text}
-                      onChange={e => setEditValues({ ...editValues, text: e.target.value })}
-                      style={{ width: "100%", marginBottom: 6 }}
-                    />
-                    <input
-                      value={editValues.answer}
-                      onChange={e => setEditValues({ ...editValues, answer: e.target.value })}
-                      style={{ width: "100%", marginBottom: 6 }}
-                    />
+              .map(r => {
+                const v = Number(r.value);
+                // increment per-value index for display like "#3 / 13"
+                seenIndex[v] = (seenIndex[v] || 0) + 1;
+                const position = seenIndex[v];
+                const groupTotal = valueCounts[v] || 0;
 
-                    {/* Edit: Question media */}
-                    <select
-                      value={editValues.questionMediaType || "image"}
-                      onChange={e => setEditValues({ ...editValues, questionMediaType: e.target.value })}
-                      style={{ width: "100%", marginBottom: 6 }}
-                    >
-                      <option value="image">صورة السؤال</option>
-                      <option value="video">فيديو السؤال</option>
-                    </select>
-                    <input
-                      value={editValues.questionImageUrl || ""}
-                      onChange={e => setEditValues({ ...editValues, questionImageUrl: e.target.value })}
-                      placeholder="Question Media URL"
-                      style={{ width: "100%", marginBottom: 6 }}
-                    />
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={e => setEditValues({ ...editValues, qFile: e.target.files?.[0] })}
-                    />
-
-                    {/* Edit: Answer media */}
-                    <select
-                      value={editValues.answerMediaType || "image"}
-                      onChange={e => setEditValues({ ...editValues, answerMediaType: e.target.value })}
-                      style={{ width: "100%", margin: "6px 0" }}
-                    >
-                      <option value="image">صورة الإجابة</option>
-                      <option value="video">فيديو الإجابة</option>
-                    </select>
-                    <input
-                      value={editValues.answerImageUrl || ""}
-                      onChange={e => setEditValues({ ...editValues, answerImageUrl: e.target.value })}
-                      placeholder="Answer Media URL"
-                      style={{ width: "100%", marginBottom: 6 }}
-                    />
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={e => setEditValues({ ...editValues, aFile: e.target.files?.[0] })}
-                    />
-
-                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                      <button onClick={() => saveEdit(r.id)} disabled={busy}>Save</button>
-                      <button onClick={() => setEditingId(null)}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={r.id} className="qcard" style={{ border: "1px solid #ddd", borderRadius: 12, padding: 10 }}>
-                    <div>
-                      <strong>{r.value}</strong> — {r.text}
-                    </div>
-
-                    {(r.questionImagePublicId || r.imagePublicId || r.questionImageUrl || r.imageUrl) && (
-                      <div style={{ marginTop: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
-                          وسائط السؤال
-                        </div>
-                        {(r.questionMediaType === "video") ? (
-                          <video
-                            src={r.questionImageUrl || r.imageUrl}
-                            style={{ width: "100%", maxWidth: 800, borderRadius: 8 }}
-                            controls
-                          />
-                        ) : (
-                          <CldImage
-                            publicId={r.questionImagePublicId || r.imagePublicId}
-                            url={r.questionImageUrl || r.imageUrl}
-                            w={800}
-                            h={300}
-                            alt="question"
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {(r.answerImagePublicId || r.answerImageUrl) && (
-                      <div style={{ marginTop: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
-                          وسائط الإجابة
-                        </div>
-                        {(r.answerMediaType === "video") ? (
-                          <video
-                            src={r.answerImageUrl}
-                            style={{ width: "100%", maxWidth: 800, borderRadius: 8 }}
-                            controls
-                          />
-                        ) : (
-                          <CldImage
-                            publicId={r.answerImagePublicId}
-                            url={r.answerImageUrl}
-                            w={800}
-                            h={300}
-                            alt="answer"
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {r.answer?.trim() && (
-                      <div style={{ marginTop: 6 }}>Ans: {r.answer}</div>
-                    )}
-                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                      <button
-                        onClick={() => {
-                          setEditingId(r.id);
-                          setEditValues({
-                            categoryId: r.categoryId,
-                            value: r.value,
-                            text: r.text,
-                            answer: r.answer,
-                            questionImageUrl: r.questionImageUrl || r.imageUrl || "",
-                            questionImagePublicId: r.questionImagePublicId || r.imagePublicId || "",
-                            answerImageUrl: r.answerImageUrl || "",
-                            answerImagePublicId: r.answerImagePublicId || "",
-                            questionMediaType: r.questionMediaType || inferMediaTypeFromUrl(r.questionImageUrl || r.imageUrl),
-                            answerMediaType: r.answerMediaType || inferMediaTypeFromUrl(r.answerImageUrl)
-                          });
-                        }}
-                        disabled={busy}
+                return (
+                  editingId === r.id ? (
+                    <div key={r.id} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 10 }}>
+                      <select
+                        value={editValues.categoryId}
+                        onChange={e => setEditValues({ ...editValues, categoryId: e.target.value })}
+                        style={{ width: "100%", marginBottom: 6 }}
                       >
-                        Edit
-                      </button>
-                      <button onClick={() => del(r.id)} disabled={busy}>Delete</button>
+                        {cats.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={editValues.value}
+                        onChange={e => setEditValues({ ...editValues, value: e.target.value })}
+                        style={{ width: "100%", marginBottom: 6 }}
+                      >
+                        <option value="200">200 ({valueCounts[200] || 0})</option>
+                        <option value="400">400 ({valueCounts[400] || 0})</option>
+                        <option value="600">600 ({valueCounts[600] || 0})</option>
+                      </select>
+                      <input
+                        value={editValues.text}
+                        onChange={e => setEditValues({ ...editValues, text: e.target.value })}
+                        style={{ width: "100%", marginBottom: 6 }}
+                      />
+                      <input
+                        value={editValues.answer}
+                        onChange={e => setEditValues({ ...editValues, answer: e.target.value })}
+                        style={{ width: "100%", marginBottom: 6 }}
+                      />
+
+                      {/* Edit: Question media */}
+                      <select
+                        value={editValues.questionMediaType || "image"}
+                        onChange={e => setEditValues({ ...editValues, questionMediaType: e.target.value })}
+                        style={{ width: "100%", marginBottom: 6 }}
+                      >
+                        <option value="image">صورة السؤال</option>
+                        <option value="video">فيديو السؤال</option>
+                      </select>
+                      <input
+                        value={editValues.questionImageUrl || ""}
+                        onChange={e => setEditValues({ ...editValues, questionImageUrl: e.target.value })}
+                        placeholder="Question Media URL"
+                        style={{ width: "100%", marginBottom: 6 }}
+                      />
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        onChange={e => setEditValues({ ...editValues, qFile: e.target.files?.[0] })}
+                      />
+
+                      {/* Edit: Answer media */}
+                      <select
+                        value={editValues.answerMediaType || "image"}
+                        onChange={e => setEditValues({ ...editValues, answerMediaType: e.target.value })}
+                        style={{ width: "100%", margin: "6px 0" }}
+                      >
+                        <option value="image">صورة الإجابة</option>
+                        <option value="video">فيديو الإجابة</option>
+                      </select>
+                      <input
+                        value={editValues.answerImageUrl || ""}
+                        onChange={e => setEditValues({ ...editValues, answerImageUrl: e.target.value })}
+                        placeholder="Answer Media URL"
+                        style={{ width: "100%", marginBottom: 6 }}
+                      />
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        onChange={e => setEditValues({ ...editValues, aFile: e.target.files?.[0] })}
+                      />
+
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button onClick={() => saveEdit(r.id)} disabled={busy}>Save</button>
+                        <button onClick={() => setEditingId(null)}>Cancel</button>
+                      </div>
                     </div>
-                  </div>
-                )
-              )}
+                  ) : (
+                    <div key={r.id} className="qcard" style={{ border: "1px solid #ddd", borderRadius: 12, padding: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <strong>{r.value}</strong>
+                     
+                        <span>— {r.text}</span>
+                      </div>
+
+                      {(r.questionImagePublicId || r.imagePublicId || r.questionImageUrl || r.imageUrl) && (
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
+                            وسائط السؤال
+                          </div>
+                          {(r.questionMediaType === "video") ? (
+                            <video
+                              src={r.questionImageUrl || r.imageUrl}
+                              style={{ width: "100%", maxWidth: 800, borderRadius: 8 }}
+                              controls
+                            />
+                          ) : (
+                            <CldImage
+                              publicId={r.questionImagePublicId || r.imagePublicId}
+                              url={r.questionImageUrl || r.imageUrl}
+                              w={800}
+                              h={300}
+                              alt="question"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {(r.answerImagePublicId || r.answerImageUrl) && (
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>
+                            وسائط الإجابة
+                          </div>
+                          {(r.answerMediaType === "video") ? (
+                            <video
+                              src={r.answerImageUrl}
+                              style={{ width: "100%", maxWidth: 800, borderRadius: 8 }}
+                              controls
+                            />
+                          ) : (
+                            <CldImage
+                              publicId={r.answerImagePublicId}
+                              url={r.answerImageUrl}
+                              w={800}
+                              h={300}
+                              alt="answer"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {r.answer?.trim() && (
+                        <div style={{ marginTop: 6 }}>Ans: {r.answer}</div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                        <button
+                          onClick={() => {
+                            setEditingId(r.id);
+                            setEditValues({
+                              categoryId: r.categoryId,
+                              value: r.value,
+                              text: r.text,
+                              answer: r.answer,
+                              questionImageUrl: r.questionImageUrl || r.imageUrl || "",
+                              questionImagePublicId: r.questionImagePublicId || r.imagePublicId || "",
+                              answerImageUrl: r.answerImageUrl || "",
+                              answerImagePublicId: r.answerImagePublicId || "",
+                              questionMediaType: r.questionMediaType || inferMediaTypeFromUrl(r.questionImageUrl || r.imageUrl),
+                              answerMediaType: r.answerMediaType || inferMediaTypeFromUrl(r.answerImageUrl)
+                            });
+                          }}
+                          disabled={busy}
+                        >
+                          Edit
+                        </button>
+                        <button onClick={() => del(r.id)} disabled={busy}>Delete</button>
+                      </div>
+                    </div>
+                  )
+                );
+              })}
           </div>
         </div>
       </div>
